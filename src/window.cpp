@@ -233,6 +233,24 @@ bool WindowManager::handle_event(const SDL_Event& event) {
     case SDL_MOUSEMOTION:
         on_mouse_move(event.motion.x, event.motion.y, screen_w_, screen_h_);
         break;
+    case SDL_TEXTINPUT:
+        {
+            Window* fw = focused_window();
+            if (fw && fw->content)
+                fw->content->on_text_input(event.text.text);
+        }
+        break;
+    case SDL_MOUSEWHEEL:
+        {
+            int mx, my;
+            SDL_GetMouseState(&mx, &my);
+            Window* sw = window_at(mx, my);
+            if (sw && sw->content) {
+                SDL_Rect cr = sw->content_rect();
+                sw->content->on_scroll(mx - cr.x, my - cr.y, event.wheel.y);
+            }
+        }
+        break;
     case SDL_KEYDOWN:
     case SDL_KEYUP:
         on_key_event(event);

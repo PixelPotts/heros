@@ -46,6 +46,7 @@ public:
     virtual void on_key_down(SDL_Keycode key) { (void)key; }
     virtual void on_key_up(SDL_Keycode key) { (void)key; }
     virtual void on_text_input(const char* text) { (void)text; }
+    virtual void on_scroll(int local_x, int local_y, int scroll_y) { (void)local_x; (void)local_y; (void)scroll_y; }
 };
 
 // ── Window structure ────────────────────────────────────────────

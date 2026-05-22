@@ -94,6 +94,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
         return 1;
     }
 
+    SDL_StartTextInput();
+
     // Load resources
     Fonts fonts;
     if (!fonts.load(FONT_PATH)) {
@@ -120,7 +122,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
     while (running) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) running = false;
-            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
+            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE
+                && !wm.focused_window())
                 running = false;
 
             // Dock click detection — check before WM so dock takes priority
