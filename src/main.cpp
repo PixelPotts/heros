@@ -33,6 +33,29 @@ static SDL_Texture* load_wallpaper(SDL_Renderer* r) {
     return tex;
 }
 
+// ── Dock click detection ────────────────────────────────────────
+
+static int dock_icon_at(int mx, int my, int screen_w, int screen_h) {
+    int dw = 380, dh = 48;
+    int dx = (screen_w - dw) / 2;
+    int dy = screen_h - 58;
+
+    // Check if click is within dock bounds
+    if (mx < dx || mx >= dx + dw || my < dy || my >= dy + dh)
+        return -1;
+
+    int num = 7;
+    int spacing = (dw - 24) / num;
+    int ix = dx + 12 + spacing / 2;
+
+    for (int i = 0; i < num; i++) {
+        if (mx >= ix - spacing / 2 && mx < ix + spacing / 2)
+            return i;
+        ix += spacing;
+    }
+    return -1;
+}
+
 int main(int /*argc*/, char* /*argv*/[]) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
@@ -87,6 +110,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
     int prev_w = INIT_W, prev_h = INIT_H;
     frost.init(renderer, prev_w, prev_h);
 
+    // Window manager
+    WindowManager wm;
+    setup_default_windows(wm, INIT_W, INIT_H);
+
     bool running = true;
     SDL_Event event;
 
@@ -95,6 +122,29 @@ int main(int /*argc*/, char* /*argv*/[]) {
             if (event.type == SDL_QUIT) running = false;
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
                 running = false;
+
+            // Dock click detection — check before WM so dock takes priority
+            if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+                int w, h;
+                SDL_GetWindowSize(window, &w, &h);
+                int dock_idx = dock_icon_at(event.button.x, event.button.y, w, h);
+                if (dock_idx == 3) { // Journal icon
+                    // Find journal window and restore if minimized, or minimize if visible
+                    for (auto& win : wm.windows()) {
+                        if (win.icon == Icon::Journal) {
+                            if (win.minimized) {
+                                wm.restore_from_dock(win.id, w, h);
+                            } else {
+                                wm.minimize(win.id);
+                            }
+                            break;
+                        }
+                    }
+                    continue; // Don't pass to WM
+                }
+            }
+
+            wm.handle_event(event);
         }
 
         int w, h;
@@ -120,8 +170,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
         render_topbar(ctx);
         render_left_sidebar(ctx);
         render_right_sidebar(ctx);
-        render_journal(ctx);
-        render_dock(ctx);
+        wm.render(ctx);
+        render_dock(ctx, wm);
 
         SDL_RenderPresent(renderer);
         SDL_Delay(16);

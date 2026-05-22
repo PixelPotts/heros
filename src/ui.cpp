@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "apps/journal_app.h"
 #include <cmath>
 #include <algorithm>
 
@@ -230,7 +231,7 @@ void render_right_sidebar(const RenderCtx& ctx) {
 
 // ── Dock ────────────────────────────────────────────────────────
 
-void render_dock(const RenderCtx& ctx) {
+void render_dock(const RenderCtx& ctx, const WindowManager& wm) {
     int dw = 380, dh = 48;
     int dx = (ctx.w - dw) / 2;
     int dy = ctx.h - 58;
@@ -247,12 +248,28 @@ void render_dock(const RenderCtx& ctx) {
     int ix = dx + 12 + spacing / 2;
 
     for (int i = 0; i < num; i++) {
-        bool active = (i == 3); // Journal is active
-        SDL_Color ic = active ? ACCENT : SDL_Color{190, 200, 220, 200};
+        // Check if this dock icon corresponds to an open window
+        bool has_open = false;
+        bool has_minimized = false;
+        if (i == 3) { // Journal slot
+            for (auto& w : wm.windows()) {
+                if (w.icon == Icon::Journal) {
+                    has_open = true;
+                    has_minimized = w.minimized;
+                    break;
+                }
+            }
+        }
+
+        SDL_Color ic = has_open ? ACCENT : SDL_Color{190, 200, 220, 200};
         draw::icon(ctx.r, dock_icons[i], ix, dy + dh / 2, 20, ic);
 
-        if (active)
+        if (has_open && !has_minimized) {
             draw::filled_circle(ctx.r, ix, dy + dh - 5, 2, ACCENT);
+        } else if (has_minimized) {
+            // Smaller dimmer dot for minimized
+            draw::filled_circle(ctx.r, ix, dy + dh - 5, 2, DIM);
+        }
 
         ix += spacing;
     }
@@ -266,98 +283,19 @@ void render_dock(const RenderCtx& ctx) {
     }
 }
 
-// ── Journal Window ──────────────────────────────────────────────
+// ── Setup Default Windows ───────────────────────────────────────
 
-void render_journal(const RenderCtx& ctx) {
+void setup_default_windows(WindowManager& wm, int screen_w, int /*screen_h*/) {
     int jw = 500, jh = 380;
-    int jx = (ctx.w - jw) / 2 - 20;
+    int jx = (screen_w - jw) / 2 - 20;
     int jy = 70;
+    SDL_Rect rect = {jx, jy, jw, jh};
 
-    // Window shadow
-    SDL_Rect shadow = {jx + 4, jy + 4, jw, jh};
-    draw::filled_rounded_rect(ctx.r, shadow, 10, {0, 0, 0, 40});
-
-    // Window body
-    SDL_Rect win = {jx, jy, jw, jh};
-    ctx.frost->render_panel(ctx.r, win, {10, 14, 25, 170});
-    draw::rounded_rect(ctx.r, win, 10, {180, 195, 220, 40});
-
-    // Title bar
-    int tby = jy + 4;
-    draw::line(ctx.r, jx, jy + 32, jx + jw, jy + 32, {180, 195, 220, 25});
-    draw::text(ctx.r, ctx.fonts->body, "Journal \xe2\x80\x94 Morning Reflection",
-               jx + 14, tby + 6, WHITE);
-
-    // Window controls
-    int cx = jx + jw - 16;
-    draw::icon(ctx.r, Icon::Close, cx, tby + 14, 10, {200, 100, 100, 200});
-    cx -= 20;
-    draw::icon(ctx.r, Icon::Maximize, cx, tby + 14, 10, DIM);
-    cx -= 20;
-    draw::icon(ctx.r, Icon::Minimize, cx, tby + 14, 10, DIM);
-
-    // Left nav panel
-    int nav_w = 110;
-    SDL_Rect nav = {jx + 1, jy + 33, nav_w, jh - 34};
-    draw::filled_rounded_rect(ctx.r, nav, 0, {10, 12, 22, 60});
-    draw::line(ctx.r, jx + nav_w, jy + 33, jx + nav_w, jy + jh, {180, 195, 220, 20});
-
-    struct NavItem { const char* label; Icon icon; };
-    NavItem items[] = {
-        {"Entries",   Icon::Journal},
-        {"Favorites", Icon::Star},
-        {"Insights",  Icon::Sparkle},
-        {"Templates", Icon::Grid},
-        {"Archive",   Icon::Box},
-    };
-
-    int ny = jy + 42;
-    for (int i = 0; i < 5; i++) {
-        bool active = (i == 0);
-        SDL_Color ic = active ? ACCENT : DIM;
-        if (active) {
-            SDL_Rect hi = {jx + 4, ny - 2, nav_w - 6, 22};
-            draw::filled_rounded_rect(ctx.r, hi, 4, {100, 150, 255, 25});
-            draw::filled_circle(ctx.r, jx + 8, ny + 9, 2, ACCENT);
-        }
-        draw::icon(ctx.r, items[i].icon, jx + 22, ny + 9, 12, ic);
-        draw::text(ctx.r, ctx.fonts->small, items[i].label, jx + 34, ny + 2, active ? WHITE : DIM);
-        ny += 26;
-    }
-
-    // Content area
-    int content_x = jx + nav_w + 16;
-    int content_y = jy + 48;
-
-    draw::text(ctx.r, ctx.fonts->title, "Morning Reflection", content_x, content_y, WHITE);
-    content_y += 28;
-
-    const char* body_lines[] = {
-        "Today, I choose patience and",
-        "presence. Each moment offers",
-        "its own wisdom, if I remain",
-        "still enough to receive it.",
-    };
-    for (auto* line : body_lines) {
-        draw::text(ctx.r, ctx.fonts->body, line, content_x, content_y, {180, 185, 200, 220});
-        content_y += 18;
-    }
-
-    content_y += 8;
-    draw::line(ctx.r, content_x, content_y, jx + jw - 16, content_y, {180, 195, 220, 25});
-    content_y += 14;
-
-    draw::text(ctx.r, ctx.fonts->body, "In stillness, understanding.",
-               content_x, content_y, {160, 170, 195, 180});
-
-    // Bottom toolbar
-    int toolbar_y = jy + jh - 28;
-    draw::line(ctx.r, jx + nav_w, toolbar_y - 4, jx + jw, toolbar_y - 4, {180, 195, 220, 20});
-
-    Icon tools[] = {Icon::Pen, Icon::Image, Icon::Pin, Icon::Check, Icon::Lock, Icon::Dots};
-    int tx = content_x;
-    for (auto tool : tools) {
-        draw::icon(ctx.r, tool, tx, toolbar_y + 6, 12, DIM);
-        tx += 28;
-    }
+    wm.open_window(
+        "Journal \xe2\x80\x94 Morning Reflection",
+        Icon::Journal,
+        rect,
+        WF_Default,
+        std::make_unique<JournalApp>()
+    );
 }
