@@ -77,7 +77,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         "HerOS",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         INIT_W, INIT_H,
-        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_FULLSCREEN_DESKTOP
     );
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
@@ -123,7 +123,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) running = false;
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE
-                && !wm.focused_window())
+                && (event.key.keysym.mod & KMOD_CTRL))
                 running = false;
 
             // Dock click detection — check before WM so dock takes priority
