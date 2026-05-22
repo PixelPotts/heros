@@ -1,87 +1,36 @@
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+#include "ui.h"
+#include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
-#include <string>
-#include <ctime>
 
-static const int SCREEN_W = 1280;
-static const int SCREEN_H = 720;
+static const int INIT_W = 1280;
+static const int INIT_H = 720;
+static const char* WALLPAPER_URL =
+    "https://images.unsplash.com/photo-1494500764479-0c8f2919a3d8?w=1920&q=80";
+static const char* WALLPAPER_PATH = "assets/wallpaper.jpg";
+static const char* FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 
-struct Clock {
-    TTF_Font* font;
-    TTF_Font* date_font;
-};
+static SDL_Texture* load_wallpaper(SDL_Renderer* r) {
+    FILE* f = fopen(WALLPAPER_PATH, "r");
+    if (!f) {
+        fprintf(stderr, "Downloading wallpaper...\n");
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd),
+                 "mkdir -p assets && curl -sL -o '%s' '%s'",
+                 WALLPAPER_PATH, WALLPAPER_URL);
+        system(cmd);
+    } else {
+        fclose(f);
+    }
 
-static std::string get_time_str() {
-    time_t now = time(nullptr);
-    struct tm* t = localtime(&now);
-    char buf[16];
-    int hour = t->tm_hour % 12;
-    if (hour == 0) hour = 12;
-    snprintf(buf, sizeof(buf), "%d:%02d %s",
-             hour, t->tm_min, t->tm_hour >= 12 ? "PM" : "AM");
-    return buf;
-}
-
-static std::string get_date_str() {
-    time_t now = time(nullptr);
-    struct tm* t = localtime(&now);
-    static const char* days[] = {"Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"};
-    static const char* months[] = {"January","February","March","April","May","June",
-                                   "July","August","September","October","November","December"};
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%s, %s %d", days[t->tm_wday], months[t->tm_mon], t->tm_mday);
-    return buf;
-}
-
-static void render_text_centered(SDL_Renderer* renderer, TTF_Font* font,
-                                  const char* text, int center_x, int y,
-                                  SDL_Color color) {
-    SDL_Surface* surf = TTF_RenderText_Blended(font, text, color);
-    if (!surf) return;
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-    SDL_Rect dst = { center_x - surf->w / 2, y, surf->w, surf->h };
-    SDL_RenderCopy(renderer, tex, nullptr, &dst);
-    SDL_DestroyTexture(tex);
+    SDL_Surface* surf = IMG_Load(WALLPAPER_PATH);
+    if (!surf) {
+        fprintf(stderr, "IMG_Load: %s\n", IMG_GetError());
+        return nullptr;
+    }
+    SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
     SDL_FreeSurface(surf);
-}
-
-static void draw_taskbar(SDL_Renderer* renderer, TTF_Font* font, int screen_w, int screen_h) {
-    int bar_h = 40;
-    int bar_y = screen_h - bar_h;
-
-    // Taskbar background - dark translucent bar
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(renderer, 20, 20, 30, 200);
-    SDL_Rect bar = { 0, bar_y, screen_w, bar_h };
-    SDL_RenderFillRect(renderer, &bar);
-
-    // Subtle top border
-    SDL_SetRenderDrawColor(renderer, 80, 80, 120, 150);
-    SDL_RenderDrawLine(renderer, 0, bar_y, screen_w, bar_y);
-
-    // "Start" button area on the left
-    SDL_Color white = {220, 220, 230, 255};
-    SDL_Surface* surf = TTF_RenderText_Blended(font, ":: HerOS", white);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-        SDL_Rect dst = { 12, bar_y + (bar_h - surf->h) / 2, surf->w, surf->h };
-        SDL_RenderCopy(renderer, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(surf);
-    }
-
-    // Clock on the right side of taskbar
-    std::string time_str = get_time_str();
-    surf = TTF_RenderText_Blended(font, time_str.c_str(), white);
-    if (surf) {
-        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
-        SDL_Rect dst = { screen_w - surf->w - 12, bar_y + (bar_h - surf->h) / 2, surf->w, surf->h };
-        SDL_RenderCopy(renderer, tex, nullptr, &dst);
-        SDL_DestroyTexture(tex);
-        SDL_FreeSurface(surf);
-    }
+    return tex;
 }
 
 int main(int /*argc*/, char* /*argv*/[]) {
@@ -94,17 +43,22 @@ int main(int /*argc*/, char* /*argv*/[]) {
         SDL_Quit();
         return 1;
     }
+    if (!(IMG_Init(IMG_INIT_JPG) & IMG_INIT_JPG)) {
+        fprintf(stderr, "IMG_Init: %s\n", IMG_GetError());
+        TTF_Quit();
+        SDL_Quit();
+        return 1;
+    }
 
     SDL_Window* window = SDL_CreateWindow(
         "HerOS",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        SCREEN_W, SCREEN_H,
+        INIT_W, INIT_H,
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
-        TTF_Quit();
-        SDL_Quit();
+        IMG_Quit(); TTF_Quit(); SDL_Quit();
         return 1;
     }
 
@@ -113,71 +67,72 @@ int main(int /*argc*/, char* /*argv*/[]) {
     if (!renderer) {
         fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
         SDL_DestroyWindow(window);
-        TTF_Quit();
-        SDL_Quit();
+        IMG_Quit(); TTF_Quit(); SDL_Quit();
         return 1;
     }
 
-    // Load fonts
-    const char* font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
-    TTF_Font* clock_font = TTF_OpenFont(font_path, 64);
-    TTF_Font* date_font  = TTF_OpenFont(font_path, 22);
-    TTF_Font* bar_font   = TTF_OpenFont(font_path, 15);
-    if (!clock_font || !date_font || !bar_font) {
-        fprintf(stderr, "Failed to load font: %s\n", TTF_GetError());
+    // Load resources
+    Fonts fonts;
+    if (!fonts.load(FONT_PATH)) {
+        fprintf(stderr, "Failed to load fonts\n");
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
-        TTF_Quit();
-        SDL_Quit();
+        IMG_Quit(); TTF_Quit(); SDL_Quit();
         return 1;
     }
+
+    SDL_Texture* wallpaper = load_wallpaper(renderer);
+
+    FrostRenderer frost;
+    int prev_w = INIT_W, prev_h = INIT_H;
+    frost.init(renderer, prev_w, prev_h);
 
     bool running = true;
     SDL_Event event;
 
     while (running) {
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT)
-                running = false;
+            if (event.type == SDL_QUIT) running = false;
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE)
                 running = false;
         }
 
         int w, h;
         SDL_GetWindowSize(window, &w, &h);
-
-        // Desktop gradient background - dark blue
-        for (int y = 0; y < h; y++) {
-            float t = static_cast<float>(y) / h;
-            Uint8 r = static_cast<Uint8>(10 + t * 15);
-            Uint8 g = static_cast<Uint8>(15 + t * 25);
-            Uint8 b = static_cast<Uint8>(40 + t * 50);
-            SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-            SDL_RenderDrawLine(renderer, 0, y, w, y);
+        if (w != prev_w || h != prev_h) {
+            frost.resize(renderer, w, h);
+            prev_w = w; prev_h = h;
         }
 
-        // Centered clock and date
-        SDL_Color white = {230, 230, 240, 255};
-        SDL_Color dim   = {160, 165, 185, 255};
+        // 1. Render scene to frost target
+        SDL_SetRenderTarget(renderer, frost.scene_target());
+        render_background(renderer, wallpaper, w, h);
+        render_geometric_overlay(renderer, w, h);
 
-        std::string time_str = get_time_str();
-        std::string date_str = get_date_str();
+        // 2. Process blur
+        frost.process_blur(renderer);
 
-        render_text_centered(renderer, clock_font, time_str.c_str(), w / 2, h / 2 - 60, white);
-        render_text_centered(renderer, date_font, date_str.c_str(), w / 2, h / 2 + 20, dim);
+        // 3. Render scene to screen
+        frost.render_scene(renderer);
 
-        // Taskbar
-        draw_taskbar(renderer, bar_font, w, h);
+        // 4. Render UI components
+        RenderCtx ctx = {renderer, &frost, &fonts, w, h};
+        render_topbar(ctx);
+        render_left_sidebar(ctx);
+        render_right_sidebar(ctx);
+        render_journal(ctx);
+        render_dock(ctx);
 
         SDL_RenderPresent(renderer);
-        SDL_Delay(16); // ~60fps
+        SDL_Delay(16);
     }
 
-    TTF_CloseFont(clock_font);
-    TTF_CloseFont(date_font);
-    TTF_CloseFont(bar_font);
+    if (wallpaper) SDL_DestroyTexture(wallpaper);
+    frost.cleanup();
+    fonts.cleanup();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    IMG_Quit();
     TTF_Quit();
     SDL_Quit();
     return 0;
