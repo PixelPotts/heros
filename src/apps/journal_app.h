@@ -117,5 +117,6 @@ private:
 
     // Layout cache
     SDL_Rect last_content_rect_ = {0, 0, 0, 0};
+    const Fonts* cached_fonts_ = nullptr;
     int next_id_ = 1;
 };

@@ -292,7 +292,7 @@ void setup_default_windows(WindowManager& wm, int screen_w, int /*screen_h*/) {
     SDL_Rect rect = {jx, jy, jw, jh};
 
     wm.open_window(
-        "Journal \xe2\x80\x94 Morning Reflection",
+        "Journal",
         Icon::Journal,
         rect,
         WF_Default,
