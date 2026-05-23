@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HerOS Architecture Roadmap</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --border-accent: #3b4a6b;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --text-muted: #6e7681;
+    --accent: #6490ff;
+    --accent-glow: rgba(100, 144, 255, 0.15);
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #a78bfa;
+    --cyan: #79c0ff;
+    --pink: #f778ba;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 40px 60px;
+    font-size: 11px;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 50px;
+    padding: 40px 0 30px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 25%; right: 25%; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+  .header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #e6edf3, #6490ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .header .subtitle {
+    font-size: 14px;
+    color: var(--text-dim);
+    font-weight: 300;
+    letter-spacing: 2px;
+  }
+  .header .date {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Status Bar ── */
+  .status-bar {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin: 30px 0 40px;
+    padding: 16px 30px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .status-item {
+    text-align: center;
+  }
+  .status-item .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .status-item .value {
+    font-size: 18px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .status-item .value.accent { color: var(--accent); }
+  .status-item .value.green { color: var(--green); }
+  .status-item .value.orange { color: var(--orange); }
+
+  /* ── Current State ── */
+  .current-state {
+    margin-bottom: 45px;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .current-state h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 16px;
+    letter-spacing: 1px;
+  }
+  .state-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .state-col h3 {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .state-col h3.real { color: var(--green); }
+  .state-col h3.missing { color: var(--red); }
+  .state-col ul {
+    list-style: none;
+    padding: 0;
+  }
+  .state-col li {
+    font-size: 11px;
+    padding: 3px 0;
+    color: var(--text-dim);
+    padding-left: 18px;
+    position: relative;
+  }
+  .state-col li::before {
+    position: absolute;
+    left: 0;
+    font-size: 10px;
+  }
+  .state-col.real li::before { content: '✓'; color: var(--green); }
+  .state-col.missing li::before { content: '✗'; color: var(--red); }
+
+  /* ── Phase Sections ── */
+  .phase {
+    margin-bottom: 35px;
+    page-break-inside: avoid;
+  }
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+    padding: 14px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+  }
+  .phase-number {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    min-width: 30px;
+  }
+  .phase-title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  .phase-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-style: italic;
+    margin-left: auto;
+  }
+  .phase-priority {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .priority-critical {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--red);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+  }
+  .priority-high {
+    background: rgba(210, 153, 34, 0.15);
+    color: var(--orange);
+    border: 1px solid rgba(210, 153, 34, 0.3);
+  }
+  .priority-medium {
+    background: rgba(100, 144, 255, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(100, 144, 255, 0.3);
+  }
+  .priority-low {
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--green);
+    border: 1px solid rgba(63, 185, 80, 0.3);
+  }
+
+  /* ── Sub-phase ── */
+  .subphase {
+    margin-left: 12px;
+    margin-bottom: 16px;
+    padding: 14px 18px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .subphase-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .subphase-id {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--accent-glow);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .subphase-title {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .subphase-summary {
+    font-size: 10.5px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    padding-left: 4px;
+    border-left: 2px solid var(--border);
+    padding: 4px 0 4px 10px;
+  }
+
+  /* ── Checklist ── */
+  .checklist {
+    list-style: none;
+    padding: 0;
+  }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 11px;
+    color: var(--text);
+  }
+  .checkbox {
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    border: 1.5px solid var(--border-accent);
+    border-radius: 3px;
+    margin-top: 2px;
+    background: transparent;
+  }
+  .checklist li .detail {
+    color: var(--text-muted);
+    font-size: 10px;
+    display: block;
+    margin-top: 1px;
+  }
+  .checklist .code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--cyan);
+    background: rgba(121, 192, 255, 0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ── Dependency Graph ── */
+  .dep-graph {
+    margin: 40px 0;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .dep-graph h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 16px;
+    letter-spacing: 1px;
+  }
+  .dep-graph pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    line-height: 1.8;
+    white-space: pre;
+  }
+  .dep-graph pre .highlight { color: var(--accent); font-weight: 600; }
+  .dep-graph pre .arrow { color: var(--text-muted); }
+  .dep-graph pre .done { color: var(--green); }
+
+  /* ── Files Reference ── */
+  .files-ref {
+    margin: 30px 0;
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .files-ref h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .file-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10.5px;
+  }
+  .file-table th {
+    text-align: left;
+    padding: 6px 10px;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 9px;
+    border-bottom: 1px solid var(--border);
+  }
+  .file-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+  }
+  .file-table td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--cyan);
+    font-size: 10px;
+  }
+  .file-table td:nth-child(2) { color: var(--text-dim); }
+  .file-table td:nth-child(3) {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    font-size: 10px;
+    text-align: right;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 50px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { padding: 20px 40px; }
+    .phase { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- HEADER                                                         -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="header">
+  <h1>HerOS</h1>
+  <div class="subtitle">System Architecture &amp; Implementation Roadmap</div>
+  <div class="date">v0.1.0 &bull; 2026-05-22 &bull; C++17 / SDL2</div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- STATUS BAR                                                     -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="status-bar">
+  <div class="status-item">
+    <div class="label">Codebase</div>
+    <div class="value accent">3,219</div>
+    <div class="label">lines</div>
+  </div>
+  <div class="status-item">
+    <div class="label">Source Files</div>
+    <div class="value accent">9</div>
+    <div class="label">files</div>
+  </div>
+  <div class="status-item">
+    <div class="label">Apps</div>
+    <div class="value green">2</div>
+    <div class="label">journal + finance</div>
+  </div>
+  <div class="status-item">
+    <div class="label">Phases</div>
+    <div class="value orange">6</div>
+    <div class="label">to complete</div>
+  </div>
+  <div class="status-item">
+    <div class="label">Sub-phases</div>
+    <div class="value orange">26</div>
+    <div class="label">work units</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- CURRENT STATE ASSESSMENT                                       -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="current-state">
+  <h2>Current State Assessment</h2>
+  <div class="state-grid">
+    <div class="state-col real">
+      <h3 class="real">Functional (Real)</h3>
+      <ul>
+        <li>Window manager &mdash; drag, resize (8-direction), minimize, maximize, close, z-order</li>
+        <li>AppContent abstract interface &mdash; clean virtual dispatch for render + input</li>
+        <li>Event routing &mdash; mouse, keyboard, scroll, text input to focused window</li>
+        <li>Journal app &mdash; full text editor, word-wrap, cursor, CRUD, filesystem persistence</li>
+        <li>Finance app &mdash; dashboard layout with donut charts, progress bars, cards</li>
+        <li>Frosted glass compositing pipeline with 8x downscale blur</li>
+        <li>Font system with 6 size tiers</li>
+        <li>Drawing primitives library (31 icons, circles, rounded rects, glow, lines)</li>
+        <li>Hit-test system for window chrome (titlebar, buttons, resize edges, content)</li>
+        <li>Hardware-accelerated rendering with vsync</li>
+      </ul>
+    </div>
+    <div class="state-col missing">
+      <h3 class="missing">Missing / Hardcoded</h3>
+      <ul>
+        <li>No app registry &mdash; apps instantiated directly via make_unique</li>
+        <li>Dock is static 7-icon array &mdash; only Journal icon (index 3) is wired</li>
+        <li>Left sidebar nav items are decorative &mdash; no click handlers</li>
+        <li>Right sidebar widgets show static fake data</li>
+        <li>No process model &mdash; no PIDs, no process state machine, no task manager</li>
+        <li>No file system abstraction &mdash; Journal uses raw POSIX calls</li>
+        <li>No IPC, event bus, clipboard, or drag-and-drop between apps</li>
+        <li>No settings/preferences system</li>
+        <li>No notification system &mdash; bell icon is decorative</li>
+        <li>No theming &mdash; colors hardcoded in every render function</li>
+        <li>No widget library &mdash; each app draws everything from raw primitives</li>
+        <li>No keyboard shortcuts framework</li>
+        <li>No search/spotlight capability</li>
+        <li>Finance app has zero persistence &mdash; entirely hardcoded data</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE 1: APP INFRASTRUCTURE                                    -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-number">01</div>
+    <div>
+      <div class="phase-title">App Infrastructure</div>
+      <div style="font-size:10px; color:var(--text-dim);">Transform hardcoded demo into extensible, registry-driven OS</div>
+    </div>
+    <div class="phase-priority priority-critical">CRITICAL &bull; START HERE</div>
+  </div>
+
+  <!-- 1A -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">1A</span>
+      <span class="subphase-title">App Manifest &amp; Registry System</span>
+    </div>
+    <div class="subphase-summary">Define what an "app" is at the OS level. Every app must have a manifest that describes its identity, capabilities, and constraints. The registry is the single source of truth for all installed apps.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">AppManifest</span> struct: <span class="code">app_id</span>, <span class="code">name</span>, <span class="code">icon</span>, <span class="code">category</span>, <span class="code">version</span><span class="detail">Unique string identifier (e.g., "com.heros.journal"), human-readable name, Icon enum, category for launcher grouping</span></div></li>
+      <li><div class="checkbox"></div><div>Add window hints to manifest: <span class="code">default_rect</span>, <span class="code">min_size</span>, <span class="code">max_size</span>, <span class="code">default_flags</span><span class="detail">Apps declare their preferred initial size and capabilities (resizable, closable, etc.)</span></div></li>
+      <li><div class="checkbox"></div><div>Add instance policy: <span class="code">singleton</span> vs <span class="code">multi_instance</span> flag<span class="detail">Journal = singleton (one instance), TextEditor = multi-instance (one per file)</span></div></li>
+      <li><div class="checkbox"></div><div>Add launch hints: <span class="code">start_maximized</span>, <span class="code">start_centered</span>, <span class="code">dock_pinned</span>, <span class="code">autostart</span><span class="detail">Controls how the app appears on first launch and whether it's pinned to dock by default</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">AppRegistry</span> class with <span class="code">register_app()</span>, <span class="code">get_manifest()</span>, <span class="code">list_apps()</span>, <span class="code">list_by_category()</span><span class="detail">Central registry that owns all manifests. Static initialization pattern for built-in apps.</span></div></li>
+      <li><div class="checkbox"></div><div>Add app categories enum: <span class="code">Productivity</span>, <span class="code">System</span>, <span class="code">Utility</span>, <span class="code">Creative</span>, <span class="code">Communication</span><span class="detail">Used by launcher and sidebar to group apps logically</span></div></li>
+      <li><div class="checkbox"></div><div>Migrate Journal and Finance to use manifests instead of hardcoded <span class="code">setup_default_windows()</span><span class="detail">Remove all hardcoded app instantiation from ui.cpp</span></div></li>
+      <li><div class="checkbox"></div><div>Add manifest validation on registration &mdash; reject duplicates, enforce required fields<span class="detail">Fail fast on malformed manifests during initialization</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 1B -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">1B</span>
+      <span class="subphase-title">App Factory &amp; Instantiation</span>
+    </div>
+    <div class="subphase-summary">Decouple app creation from window creation. A single code path for launching any app, used by dock, sidebar, keyboard shortcuts, and any future launcher.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">AppFactory</span> function signature: <span class="code">std::function&lt;unique_ptr&lt;AppContent&gt;()&gt;</span><span class="detail">Each app registers a factory lambda that constructs its AppContent subclass</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">register_factory(app_id, factory_fn)</span> to <span class="code">AppRegistry</span><span class="detail">Associates a creation function with each manifest entry</span></div></li>
+      <li><div class="checkbox"></div><div>Implement <span class="code">AppRegistry::create(app_id) &rarr; unique_ptr&lt;AppContent&gt;</span><span class="detail">Looks up factory, calls it, returns new instance. Returns nullptr if unknown app_id.</span></div></li>
+      <li><div class="checkbox"></div><div>Implement <span class="code">AppRegistry::launch(app_id)</span> &mdash; high-level launch that checks singleton, creates window via WM<span class="detail">If singleton and already running, focus existing window instead of creating new one</span></div></li>
+      <li><div class="checkbox"></div><div>Add launch arguments support: <span class="code">launch(app_id, LaunchArgs)</span> for opening specific files/views<span class="detail">e.g., launch journal with a specific entry pre-selected, or finance with a specific tab</span></div></li>
+      <li><div class="checkbox"></div><div>Wire <span class="code">AppContent</span> back-pointer: each app gets a reference to its owning process/window context<span class="detail">Apps need to know their own window ID to request close, title change, etc.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">AppContent::set_context(AppContext*)</span> called after construction<span class="detail">AppContext provides: window_id, app_id, reference to system services</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">register_builtin_apps()</span> function that registers Journal, Finance, and future built-ins<span class="detail">Called once at startup, replaces setup_default_windows</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 1C -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">1C</span>
+      <span class="subphase-title">App Lifecycle Signals</span>
+    </div>
+    <div class="subphase-summary">Apps need to know when they're activated, deactivated, about to close, or resized. Currently the only signal is destruction via unique_ptr reset.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Add <span class="code">on_activate()</span> / <span class="code">on_deactivate()</span> to AppContent<span class="detail">Called when window gains/loses focus. Apps can pause animations, save draft state, etc.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">on_close() &rarr; bool</span> to AppContent &mdash; return false to cancel close<span class="detail">Journal can prompt "save changes?" before allowing close. Finance can warn about unsaved edits.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">on_resize(int w, int h)</span> to AppContent<span class="detail">Notify app of content area resize so it can rebuild layout caches (e.g., Journal's word-wrap cache)</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">on_launch(const LaunchArgs&amp;)</span> to AppContent<span class="detail">Called once after construction with any launch arguments (file to open, view to show)</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">on_save_state() &rarr; json</span> and <span class="code">on_restore_state(json)</span><span class="detail">Serialize/deserialize app state for session restore. Journal saves open entry, cursor position, scroll.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">on_timer(uint32_t timer_id)</span> for periodic callbacks<span class="detail">Replace raw SDL tick comparisons (cursor blink) with proper timer registration</span></div></li>
+      <li><div class="checkbox"></div><div>Wire WindowManager to call lifecycle methods at correct moments<span class="detail">set_focus &rarr; on_activate/on_deactivate, close_window &rarr; on_close check, resize end &rarr; on_resize</span></div></li>
+      <li><div class="checkbox"></div><div>Migrate Journal's destructor-based save to <span class="code">on_close()</span> lifecycle hook<span class="detail">Proper save with error handling instead of relying on unique_ptr destructor side effects</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 1D -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">1D</span>
+      <span class="subphase-title">Dynamic Dock &amp; App Launcher</span>
+    </div>
+    <div class="subphase-summary">The dock becomes data-driven from the registry. Every registered app with dock_pinned=true appears. Running apps show indicators. Clicking launches or focuses.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Refactor dock rendering to read pinned apps from <span class="code">AppRegistry</span><span class="detail">Replace static Icon[] array with dynamic list from registry where dock_pinned=true</span></div></li>
+      <li><div class="checkbox"></div><div>Show running (non-pinned) apps in dock dynamically<span class="detail">Pinned apps always show; running non-pinned apps appear temporarily</span></div></li>
+      <li><div class="checkbox"></div><div>Implement dock click handler for all apps &mdash; not just Journal<span class="detail">Click: launch if not running, focus if running, minimize if focused. Same behavior for every app.</span></div></li>
+      <li><div class="checkbox"></div><div>Add dock indicator states: running (dot), minimized (dim dot), focused (bright dot)<span class="detail">Visual feedback for app state directly on dock icons</span></div></li>
+      <li><div class="checkbox"></div><div>Add dock tooltips on hover &mdash; show app name<span class="detail">Hover over dock icon shows app name from manifest</span></div></li>
+      <li><div class="checkbox"></div><div>Wire left sidebar nav items to launch apps by category<span class="detail">"Journal" in sidebar opens Journal app; "Work" opens Finance; etc.</span></div></li>
+      <li><div class="checkbox"></div><div>Implement dock right-click context menu: "Close", "New Window" (if multi-instance), "Pin/Unpin"<span class="detail">Requires context menu infrastructure (can be simple initially)</span></div></li>
+      <li><div class="checkbox"></div><div>Add dock badge support &mdash; notification count overlay on app icons<span class="detail">Small number badge (e.g., "3" on Journal for unread entries)</span></div></li>
+      <li><div class="checkbox"></div><div>Add dock auto-sizing &mdash; expand width as more apps are pinned/running<span class="detail">Currently fixed at 380px; should grow dynamically based on icon count</span></div></li>
+      <li><div class="checkbox"></div><div>Add dock separator between pinned and running sections<span class="detail">Visual divider line between user-pinned apps and transiently-running apps</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 1E -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">1E</span>
+      <span class="subphase-title">App Context &amp; System Service Access</span>
+    </div>
+    <div class="subphase-summary">Apps need a clean interface to request OS services without tightly coupling to system internals. AppContext is the app's handle to the world.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">AppContext</span> struct: window_id, app_id, pointers to system services<span class="detail">Passed to each app after creation. The app's only interface to OS-level functionality.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">ctx.request_close()</span> &mdash; app asks the OS to close its own window<span class="detail">Goes through proper lifecycle (on_close check) instead of apps closing themselves directly</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">ctx.set_title(string)</span> &mdash; app can update its window title dynamically<span class="detail">Journal changes title to "Journal - [entry name]" when editing an entry</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">ctx.request_focus()</span> &mdash; app can request the OS to bring it to front<span class="detail">For apps that receive background notifications and want user attention</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">ctx.launch_app(app_id, args)</span> &mdash; one app can launch another<span class="detail">Journal could launch a Settings page; Finance could launch a detailed report view</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">ctx.get_system_time()</span>, <span class="code">ctx.get_screen_size()</span> &mdash; system info queries<span class="detail">Apps use this instead of calling SDL directly, maintaining abstraction boundary</span></div></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE 2: PROCESS MODEL                                         -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-number">02</div>
+    <div>
+      <div class="phase-title">Process Model</div>
+      <div style="font-size:10px; color:var(--text-dim);">Give each running app identity, state, and managed lifecycle</div>
+    </div>
+    <div class="phase-priority priority-high">HIGH PRIORITY</div>
+  </div>
+
+  <!-- 2A -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">2A</span>
+      <span class="subphase-title">Process Table &amp; PID Assignment</span>
+    </div>
+    <div class="subphase-summary">Every running app gets a unique process ID and tracked state. The ProcessManager is the authority on what's running.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">ProcessInfo</span> struct: <span class="code">pid</span>, <span class="code">app_id</span>, <span class="code">state</span>, <span class="code">window_id</span>, <span class="code">start_time</span>, <span class="code">cpu_time</span><span class="detail">Core metadata for each running process. PID is monotonically increasing uint32.</span></div></li>
+      <li><div class="checkbox"></div><div>Define process states: <span class="code">Starting &rarr; Running &rarr; Suspended &rarr; Terminating &rarr; Dead</span><span class="detail">State machine with well-defined transitions. Invalid transitions are rejected.</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">ProcessManager</span> class with <span class="code">spawn()</span>, <span class="code">terminate()</span>, <span class="code">kill()</span>, <span class="code">suspend()</span>, <span class="code">resume()</span><span class="detail">Central process lifecycle management. spawn() assigns PID, creates AppContent, opens window.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">list_processes()</span>, <span class="code">get_process(pid)</span>, <span class="code">find_by_app_id()</span> queries<span class="detail">Used by task manager, dock, and system services to inspect running state</span></div></li>
+      <li><div class="checkbox"></div><div>Route all app launches through ProcessManager instead of direct WindowManager calls<span class="detail">ProcessManager owns the lifecycle: spawn &rarr; create AppContent &rarr; open_window &rarr; wire context</span></div></li>
+      <li><div class="checkbox"></div><div>Add process parent tracking: <span class="code">parent_pid</span> field for apps launched by other apps<span class="detail">Enables process trees &mdash; when parent closes, children can optionally close too</span></div></li>
+      <li><div class="checkbox"></div><div>Add process resource tracking: memory estimate, render time per frame<span class="detail">Even if approximate, gives the system monitor real data to display</span></div></li>
+      <li><div class="checkbox"></div><div>Emit process events: <span class="code">ProcessSpawned</span>, <span class="code">ProcessTerminated</span>, <span class="code">ProcessStateChanged</span><span class="detail">Other system components (dock, taskbar, task manager) react to these events</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 2B -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">2B</span>
+      <span class="subphase-title">Graceful Shutdown &amp; Error Recovery</span>
+    </div>
+    <div class="subphase-summary">Closing an app should be a negotiated process, not an abrupt destruction. Apps can save, prompt, or refuse.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Implement graceful terminate: <span class="code">terminate(pid)</span> &rarr; <span class="code">on_close()</span> &rarr; wait &rarr; destroy<span class="detail">Sends close request to app, waits for response, then removes window and process</span></div></li>
+      <li><div class="checkbox"></div><div>Implement force kill: <span class="code">kill(pid)</span> &rarr; immediate destroy, no callbacks<span class="detail">For unresponsive apps. Bypasses on_close(), directly destroys. Last resort.</span></div></li>
+      <li><div class="checkbox"></div><div>Add close timeout: if <span class="code">on_close()</span> doesn't return within 3 seconds, offer force-kill<span class="detail">Prevents apps from blocking shutdown indefinitely</span></div></li>
+      <li><div class="checkbox"></div><div>Implement system shutdown sequence: terminate all in reverse-launch order<span class="detail">When user quits HerOS, all apps get orderly close signals</span></div></li>
+      <li><div class="checkbox"></div><div>Add crash detection: wrap app render/event calls in try/catch, mark process as crashed<span class="detail">A crashing app shouldn't bring down the whole OS. Show error dialog, offer restart.</span></div></li>
+      <li><div class="checkbox"></div><div>Add restart capability: <span class="code">restart(pid)</span> &mdash; terminate then re-spawn same app with saved state<span class="detail">Useful for apps that crash or need settings reload</span></div></li>
+      <li><div class="checkbox"></div><div>Add "unsaved changes" dialog infrastructure<span class="detail">When on_close returns false, system shows a modal dialog: Save / Discard / Cancel</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 2C -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">2C</span>
+      <span class="subphase-title">Background Services</span>
+    </div>
+    <div class="subphase-summary">Not all processes need windows. Services run in the background providing capabilities to the OS and other apps.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">Service</span> base class: <span class="code">on_start()</span>, <span class="code">on_stop()</span>, <span class="code">on_tick()</span><span class="detail">Like AppContent but without render/input methods. Runs headless.</span></div></li>
+      <li><div class="checkbox"></div><div>Add service lifecycle: <span class="code">Starting &rarr; Running &rarr; Stopped</span> with restart policy<span class="detail">Services can be configured to auto-restart on crash</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">ClockService</span> &mdash; maintains system time, emits <span class="code">MinuteChanged</span>, <span class="code">HourChanged</span> events<span class="detail">Topbar clock reads from this service instead of calling time() directly</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">NotificationService</span> stub &mdash; queue and display toast notifications<span class="detail">Apps call notify(), service manages queue, display duration, and dismissal</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">SystemMonitorService</span> &mdash; tracks frame time, process count, memory estimates<span class="detail">Feeds data to the right sidebar "System Harmony" widget, making it real</span></div></li>
+      <li><div class="checkbox"></div><div>Add service discovery: <span class="code">ProcessManager::get_service&lt;T&gt;()</span> typed accessor<span class="detail">Apps and other services can locate services by type</span></div></li>
+      <li><div class="checkbox"></div><div>Add service dependency declaration in manifest: <span class="code">requires: ["notification", "clock"]</span><span class="detail">Services start in dependency order; dependent services start before dependents</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 2D -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">2D</span>
+      <span class="subphase-title">Session Management</span>
+    </div>
+    <div class="subphase-summary">Remember what was running between sessions. When HerOS starts, restore the previous workspace.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Save session state on shutdown: list of running apps, window positions, states<span class="detail">Write to ~/.heros/session.json: [{app_id, rect, maximized, z_order, app_state}, ...]</span></div></li>
+      <li><div class="checkbox"></div><div>Restore session on startup: re-launch saved apps with saved positions<span class="detail">Replace setup_default_windows with session restore. Fall back to defaults if no session.</span></div></li>
+      <li><div class="checkbox"></div><div>Per-app state serialization via <span class="code">on_save_state()</span> / <span class="code">on_restore_state()</span><span class="detail">Journal saves: open entry index, cursor position, scroll offset, active tab</span></div></li>
+      <li><div class="checkbox"></div><div>Add "Default Session" concept: what apps open on first-ever launch<span class="detail">Defined in code or config: e.g., Finance maximized + Journal minimized</span></div></li>
+      <li><div class="checkbox"></div><div>Add session auto-save on a timer (every 60 seconds) for crash recovery<span class="detail">If HerOS crashes, next launch restores from last auto-save</span></div></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE 3: FILE & DATA LAYER                                     -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-number">03</div>
+    <div>
+      <div class="phase-title">File &amp; Data Layer</div>
+      <div style="font-size:10px; color:var(--text-dim);">Persistence becomes an OS-provided service, not each app's problem</div>
+    </div>
+    <div class="phase-priority priority-high">HIGH PRIORITY</div>
+  </div>
+
+  <!-- 3A -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">3A</span>
+      <span class="subphase-title">Virtual Filesystem (VFS)</span>
+    </div>
+    <div class="subphase-summary">Abstract filesystem access behind a clean API. Apps never call POSIX directly. The VFS maps virtual paths to real disk locations.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">FileSystem</span> interface: <span class="code">read()</span>, <span class="code">write()</span>, <span class="code">list()</span>, <span class="code">mkdir()</span>, <span class="code">remove()</span>, <span class="code">stat()</span>, <span class="code">exists()</span><span class="detail">Pure virtual interface. Default implementation wraps POSIX. Could be swapped for in-memory FS for testing.</span></div></li>
+      <li><div class="checkbox"></div><div>Define virtual path layout: <span class="code">/system/</span>, <span class="code">/apps/&lt;id&gt;/</span>, <span class="code">/user/</span>, <span class="code">/tmp/</span><span class="detail">/system/ = OS config. /apps/journal/data/ = Journal's data. /user/ = user files. /tmp/ = ephemeral.</span></div></li>
+      <li><div class="checkbox"></div><div>Implement path resolution: virtual paths &rarr; real paths under <span class="code">~/.heros/</span><span class="detail">/apps/journal/data/entry1.txt &rarr; ~/.heros/apps/journal/data/entry1.txt</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">ScopedFS</span>: per-app filesystem view scoped to <span class="code">/apps/&lt;id&gt;/</span><span class="detail">Apps get a ScopedFS that can only access their own data directory. Sandboxing.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">FileInfo</span> struct: path, size, modified_time, is_directory, mime_type<span class="detail">Returned by stat() and list(). MIME type inferred from extension.</span></div></li>
+      <li><div class="checkbox"></div><div>Migrate Journal from raw POSIX to VFS API<span class="detail">Replace data_dir() + fopen/fclose with fs.read(), fs.write(), fs.list()</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">FileWatcher</span>: notify apps when files in their data directory change<span class="detail">Uses inotify on Linux. Enables live-reload of data when edited externally.</span></div></li>
+      <li><div class="checkbox"></div><div>Add atomic write: <span class="code">write_atomic(path, data)</span> &mdash; write to .tmp then rename<span class="detail">Prevents data corruption if HerOS crashes mid-write</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 3B -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">3B</span>
+      <span class="subphase-title">Settings &amp; Preferences Store</span>
+    </div>
+    <div class="subphase-summary">Typed key-value store for system and per-app settings. JSON-backed, observable, with defaults.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">Settings</span> class: <span class="code">get&lt;T&gt;(key, default)</span>, <span class="code">set(key, value)</span>, <span class="code">has(key)</span>, <span class="code">remove(key)</span><span class="detail">Typed accessors for bool, int, float, string, color. Returns default if key doesn't exist.</span></div></li>
+      <li><div class="checkbox"></div><div>Add namespace scoping: <span class="code">settings.system()</span>, <span class="code">settings.app("journal")</span><span class="detail">System settings in /system/settings.json, per-app in /apps/journal/settings.json</span></div></li>
+      <li><div class="checkbox"></div><div>Add change observers: <span class="code">settings.on_change(key, callback)</span><span class="detail">Theme change immediately updates all windows without restart</span></div></li>
+      <li><div class="checkbox"></div><div>Define system settings schema: wallpaper_path, theme, dock_position, font_scale, quiet_hours<span class="detail">Well-known keys that system components read from</span></div></li>
+      <li><div class="checkbox"></div><div>Add settings migration: version field + upgrade functions for schema changes<span class="detail">When settings format changes between versions, migrate automatically</span></div></li>
+      <li><div class="checkbox"></div><div>Implement JSON serialization/deserialization for settings files<span class="detail">Use a lightweight JSON library or simple parser. Read on startup, write on change.</span></div></li>
+      <li><div class="checkbox"></div><div>Add settings import/export for user portability<span class="detail">Export all settings to a single JSON file, import to restore on new system</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 3C -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">3C</span>
+      <span class="subphase-title">File Associations &amp; MIME Types</span>
+    </div>
+    <div class="subphase-summary">Map file types to apps. The OS knows which app handles which files.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define MIME type registry: extension &rarr; MIME type mapping<span class="detail">.txt &rarr; text/plain, .journal &rarr; application/x-heros-journal, .csv &rarr; text/csv</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">handles</span> field to AppManifest: list of MIME types the app can open<span class="detail">Journal handles text/plain and application/x-heros-journal</span></div></li>
+      <li><div class="checkbox"></div><div>Implement <span class="code">open_file(path)</span> &mdash; resolve MIME type, find handler app, launch with file path<span class="detail">The OS-level "double-click a file" operation</span></div></li>
+      <li><div class="checkbox"></div><div>Add default handler per MIME type + user override capability<span class="detail">System picks first registered handler; user can change default in settings</span></div></li>
+      <li><div class="checkbox"></div><div>Add "Open With..." dialog for choosing non-default handler<span class="detail">Right-click file &rarr; Open With &rarr; shows all apps that handle that MIME type</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">AppContent::on_open_file(path)</span> lifecycle method<span class="detail">Called when an app is launched to handle a specific file</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 3D -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">3D</span>
+      <span class="subphase-title">Data Persistence for Finance App</span>
+    </div>
+    <div class="subphase-summary">Make Finance real. Replace hardcoded data with persistent storage using the VFS and settings systems.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define Finance data model: <span class="code">Account</span>, <span class="code">Transaction</span>, <span class="code">Budget</span>, <span class="code">Goal</span> structs<span class="detail">Proper data structures replacing inline hardcoded values</span></div></li>
+      <li><div class="checkbox"></div><div>Implement Finance data persistence via VFS: <span class="code">/apps/finance/data/</span><span class="detail">Accounts in accounts.json, transactions in transactions.json, etc.</span></div></li>
+      <li><div class="checkbox"></div><div>Add transaction CRUD: add, edit, delete, list with date range filter<span class="detail">Finance app becomes interactive &mdash; users can add real transactions</span></div></li>
+      <li><div class="checkbox"></div><div>Add CSV import/export for transactions<span class="detail">Import bank statements, export for spreadsheet analysis</span></div></li>
+      <li><div class="checkbox"></div><div>Wire donut chart and budget bars to real computed data<span class="detail">Category totals computed from actual transactions, not hardcoded percentages</span></div></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE 4: IPC & COMMUNICATION                                   -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-number">04</div>
+    <div>
+      <div class="phase-title">Inter-Process Communication</div>
+      <div style="font-size:10px; color:var(--text-dim);">Apps talk to each other and to the system through well-defined channels</div>
+    </div>
+    <div class="phase-priority priority-medium">MEDIUM PRIORITY</div>
+  </div>
+
+  <!-- 4A -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">4A</span>
+      <span class="subphase-title">System Event Bus</span>
+    </div>
+    <div class="subphase-summary">Publish-subscribe event system. Apps and services emit events; interested parties subscribe. Fully decoupled.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">EventBus</span> class: <span class="code">publish(event)</span>, <span class="code">subscribe&lt;T&gt;(callback)</span>, <span class="code">unsubscribe(handle)</span><span class="detail">Type-safe event routing. Subscribers receive only events of types they registered for.</span></div></li>
+      <li><div class="checkbox"></div><div>Define core event types: <span class="code">AppLaunched</span>, <span class="code">AppClosed</span>, <span class="code">FileChanged</span>, <span class="code">ThemeChanged</span>, <span class="code">SettingChanged</span><span class="detail">Well-known system events that any component can subscribe to</span></div></li>
+      <li><div class="checkbox"></div><div>Add event priorities: <span class="code">Immediate</span> (sync) vs <span class="code">Queued</span> (next frame)<span class="detail">Some events need immediate processing (clipboard); others can be deferred (theme change)</span></div></li>
+      <li><div class="checkbox"></div><div>Add scoped subscriptions: auto-unsubscribe when process terminates<span class="detail">Prevents dangling callbacks. Subscription lifetime tied to process lifetime.</span></div></li>
+      <li><div class="checkbox"></div><div>Add event history/replay for late subscribers<span class="detail">New subscribers can optionally receive the last N events of a type (e.g., latest ThemeChanged)</span></div></li>
+      <li><div class="checkbox"></div><div>Wire existing hardcoded updates to use event bus<span class="detail">Screen resize &rarr; ScreenResized event. Window focus &rarr; FocusChanged event.</span></div></li>
+      <li><div class="checkbox"></div><div>Add event filtering: subscribe with predicate <span class="code">subscribe&lt;FileChanged&gt;(cb, filter)</span><span class="detail">Only receive FileChanged events for paths matching a pattern</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 4B -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">4B</span>
+      <span class="subphase-title">Clipboard System</span>
+    </div>
+    <div class="subphase-summary">System-wide clipboard for copy/paste between apps and with the host OS.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">Clipboard</span> class: <span class="code">copy(mime, data)</span>, <span class="code">paste() &rarr; (mime, data)</span>, <span class="code">has_content()</span>, <span class="code">clear()</span><span class="detail">MIME-typed clipboard supporting text/plain initially, extensible to images and structured data</span></div></li>
+      <li><div class="checkbox"></div><div>Integrate with SDL clipboard for host OS interop<span class="detail">SDL_SetClipboardText / SDL_GetClipboardText for text. HerOS clipboard layers on top.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">on_copy()</span> / <span class="code">on_paste()</span> / <span class="code">on_cut()</span> to AppContent<span class="detail">Window manager intercepts Ctrl+C/V/X and calls focused app's methods</span></div></li>
+      <li><div class="checkbox"></div><div>Implement text selection in Journal using clipboard<span class="detail">Select text in editor, Ctrl+C copies, Ctrl+V pastes. Currently no selection model.</span></div></li>
+      <li><div class="checkbox"></div><div>Add clipboard history: last 10 copied items accessible via Ctrl+Shift+V<span class="detail">Small popup showing recent clipboard entries to paste from</span></div></li>
+      <li><div class="checkbox"></div><div>Emit <span class="code">ClipboardChanged</span> event when clipboard content changes<span class="detail">Apps can react to clipboard content (e.g., paste button enables/disables)</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 4C -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">4C</span>
+      <span class="subphase-title">Drag &amp; Drop Framework</span>
+    </div>
+    <div class="subphase-summary">Drag data between apps, from the file system, or within an app. The window manager mediates the protocol.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">DragData</span> struct: <span class="code">mime_type</span>, <span class="code">payload</span>, <span class="code">source_pid</span>, <span class="code">preview_icon</span><span class="detail">Typed data that can be dragged between windows</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">on_drag_start()</span>, <span class="code">on_drag_over()</span>, <span class="code">on_drop()</span> to AppContent<span class="detail">Source app starts drag; target app accepts/rejects via on_drag_over; on_drop delivers data</span></div></li>
+      <li><div class="checkbox"></div><div>Implement cursor change during drag operations<span class="detail">Show drag cursor with preview icon. Change to accept/reject cursor over valid/invalid targets.</span></div></li>
+      <li><div class="checkbox"></div><div>Add drag-from-host-OS support via SDL_DROPFILE events<span class="detail">Drag a file from the real desktop into HerOS &rarr; route to focused app's on_drop()</span></div></li>
+      <li><div class="checkbox"></div><div>Implement intra-app drag in Journal: reorder entries via drag<span class="detail">Drag entry in list view to reorder. Visual feedback shows insertion point.</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 4D -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">4D</span>
+      <span class="subphase-title">Notification System</span>
+    </div>
+    <div class="subphase-summary">Toast notifications, badge counts, and attention requests. The bell icon becomes real.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">Notification</span> struct: <span class="code">title</span>, <span class="code">body</span>, <span class="code">icon</span>, <span class="code">urgency</span>, <span class="code">source_app_id</span>, <span class="code">timestamp</span>, <span class="code">actions[]</span><span class="detail">Rich notification model with actionable buttons</span></div></li>
+      <li><div class="checkbox"></div><div>Implement toast renderer: slide-in from top-right, auto-dismiss after 5 seconds<span class="detail">Frosted-glass card with title, body, and action buttons. Stack multiple toasts.</span></div></li>
+      <li><div class="checkbox"></div><div>Add notification center: click bell icon &rarr; panel showing notification history<span class="detail">Scrollable list of past notifications, mark as read, clear all</span></div></li>
+      <li><div class="checkbox"></div><div>Add unread badge on bell icon: count of unseen notifications<span class="detail">Small red circle with number on topbar bell icon</span></div></li>
+      <li><div class="checkbox"></div><div>Add dock badge: per-app notification count on dock icons<span class="detail">Small badge number overlay on app's dock icon</span></div></li>
+      <li><div class="checkbox"></div><div>Add urgency levels: <span class="code">Low</span> (silent), <span class="code">Normal</span> (toast), <span class="code">Critical</span> (persistent + sound)<span class="detail">Critical notifications stay until dismissed and play alert sound</span></div></li>
+      <li><div class="checkbox"></div><div>Add "Do Not Disturb" mode tied to Quiet Hours setting<span class="detail">Suppresses toasts during configured hours; notifications still queue for later</span></div></li>
+      <li><div class="checkbox"></div><div>Wire <span class="code">ctx.notify(title, body, urgency)</span> in AppContext<span class="detail">Apps use this one-liner to send notifications through the system</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 4E -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">4E</span>
+      <span class="subphase-title">Direct Messaging Between Apps</span>
+    </div>
+    <div class="subphase-summary">Point-to-point communication for apps that need to exchange structured data directly.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">Message</span> struct: <span class="code">type</span>, <span class="code">sender_pid</span>, <span class="code">payload</span><span class="detail">Typed messages sent from one process to another</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">send_message(target_pid, message)</span> to AppContext<span class="detail">Send a message to a specific running process by PID</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">on_message(Message&amp;)</span> to AppContent<span class="detail">Receiving app handles incoming messages</span></div></li>
+      <li><div class="checkbox"></div><div>Add request/response pattern: <span class="code">send_request(pid, msg) &rarr; future&lt;reply&gt;</span><span class="detail">Synchronous-style messaging with response callbacks</span></div></li>
+      <li><div class="checkbox"></div><div>Example integration: Journal sends "new expense entry" to Finance<span class="detail">User writes about a purchase in journal, clicks "Add to Finance" &rarr; creates transaction</span></div></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE 5: SYSTEM SERVICES & SHELL                               -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-number">05</div>
+    <div>
+      <div class="phase-title">System Services &amp; Shell</div>
+      <div style="font-size:10px; color:var(--text-dim);">Built-in apps and system-level capabilities that make the OS feel complete</div>
+    </div>
+    <div class="phase-priority priority-medium">MEDIUM PRIORITY</div>
+  </div>
+
+  <!-- 5A -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">5A</span>
+      <span class="subphase-title">Task Manager App</span>
+    </div>
+    <div class="subphase-summary">Visual process inspector. Shows what's running, resource usage, and allows force-killing apps.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Create <span class="code">TaskManagerApp</span> extending AppContent<span class="detail">System utility app showing process table in a sortable list view</span></div></li>
+      <li><div class="checkbox"></div><div>Display columns: PID, App Name, Status, Window Title, CPU Time, Memory, Start Time<span class="detail">Reads from ProcessManager. Updates every second.</span></div></li>
+      <li><div class="checkbox"></div><div>Add "End Process" button per row &mdash; calls <span class="code">terminate(pid)</span><span class="detail">Graceful close with confirmation dialog</span></div></li>
+      <li><div class="checkbox"></div><div>Add "Force Kill" button &mdash; calls <span class="code">kill(pid)</span><span class="detail">Immediate destruction, no save prompt. Requires confirmation.</span></div></li>
+      <li><div class="checkbox"></div><div>Show services separately from windowed apps<span class="detail">Two sections: "Applications" and "Background Services"</span></div></li>
+      <li><div class="checkbox"></div><div>Add system stats header: total processes, frame rate, frame time, uptime<span class="detail">Summary bar at top showing overall system health</span></div></li>
+      <li><div class="checkbox"></div><div>Wire "System Harmony" sidebar widget to real data from task manager<span class="detail">Percentage based on: all processes healthy, no crashes, frame rate stable</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 5B -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">5B</span>
+      <span class="subphase-title">Settings App</span>
+    </div>
+    <div class="subphase-summary">GUI for all system and app settings. Reads/writes through the Settings store.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Create <span class="code">SettingsApp</span> with tabbed interface: General, Appearance, Apps, About<span class="detail">Each tab shows relevant settings with appropriate input widgets</span></div></li>
+      <li><div class="checkbox"></div><div>General tab: user name, timezone, date format, quiet hours schedule<span class="detail">Basic system configuration</span></div></li>
+      <li><div class="checkbox"></div><div>Appearance tab: wallpaper selection, theme (dark/light/auto), accent color, font scale<span class="detail">Preview changes live before applying</span></div></li>
+      <li><div class="checkbox"></div><div>Apps tab: per-app settings, default file associations, startup apps<span class="detail">List installed apps with per-app settings panels</span></div></li>
+      <li><div class="checkbox"></div><div>About tab: HerOS version, build info, credits, system info<span class="detail">Version number, build date, linked library versions</span></div></li>
+      <li><div class="checkbox"></div><div>Wire sidebar "Settings" nav item to launch Settings app<span class="detail">Currently decorative; becomes functional</span></div></li>
+      <li><div class="checkbox"></div><div>Add settings search: filter settings by keyword<span class="detail">Type to filter across all tabs to find specific settings quickly</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 5C -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">5C</span>
+      <span class="subphase-title">Search / Spotlight</span>
+    </div>
+    <div class="subphase-summary">Global search overlay. Find apps, files, journal entries, settings &mdash; all from one place.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">Searchable</span> interface: <span class="code">search(query) &rarr; vector&lt;SearchResult&gt;</span><span class="detail">Apps implement this to make their content discoverable through global search</span></div></li>
+      <li><div class="checkbox"></div><div>Create search overlay UI: centered modal with text input + results list<span class="detail">Frosted glass overlay, appears with keyboard shortcut, dismisses on Escape</span></div></li>
+      <li><div class="checkbox"></div><div>Register built-in search providers: apps (by name), settings (by key), files (by name)<span class="detail">System providers always available. App providers added when app registers as Searchable.</span></div></li>
+      <li><div class="checkbox"></div><div>Journal search provider: search entry titles and body text<span class="detail">Returns matching entries with snippet preview. Selecting opens Journal to that entry.</span></div></li>
+      <li><div class="checkbox"></div><div>Add result categories with section headers: "Apps", "Journal Entries", "Settings", "Files"<span class="detail">Results grouped by source with clear visual separation</span></div></li>
+      <li><div class="checkbox"></div><div>Add keyboard navigation: arrow keys to select, Enter to open, Tab to switch category<span class="detail">Fully keyboard-driven for speed</span></div></li>
+      <li><div class="checkbox"></div><div>Bind to <span class="code">Ctrl+Space</span> or <span class="code">Ctrl+K</span> system-wide<span class="detail">Works from anywhere, regardless of focused app</span></div></li>
+      <li><div class="checkbox"></div><div>Add fuzzy matching for app names and entry titles<span class="detail">"jrn" matches "Journal", "fin" matches "Finance"</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 5D -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">5D</span>
+      <span class="subphase-title">Keyboard Shortcuts Framework</span>
+    </div>
+    <div class="subphase-summary">System-level and per-app keyboard shortcut registration, conflict detection, and help overlay.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">ShortcutManager</span>: <span class="code">bind(shortcut, action, scope)</span>, <span class="code">unbind()</span>, <span class="code">list()</span><span class="detail">Scopes: System (always active), App (only when app focused), Modal (during dialog)</span></div></li>
+      <li><div class="checkbox"></div><div>Register system shortcuts: <span class="code">Ctrl+Q</span> quit, <span class="code">Ctrl+Space</span> search, <span class="code">Ctrl+Tab</span> switch window<span class="detail">System shortcuts take priority over app shortcuts</span></div></li>
+      <li><div class="checkbox"></div><div>Add per-app shortcut registration via AppContext<span class="detail">Apps register their own shortcuts; automatically scoped to when focused</span></div></li>
+      <li><div class="checkbox"></div><div>Add conflict detection: warn when two bindings collide<span class="detail">System shortcuts always win. App-app conflicts warned at registration.</span></div></li>
+      <li><div class="checkbox"></div><div>Add shortcut help overlay: <span class="code">Ctrl+/</span> shows all active shortcuts<span class="detail">Modal overlay listing all shortcuts for current context (system + focused app)</span></div></li>
+      <li><div class="checkbox"></div><div>Add shortcut customization: user can rebind in Settings app<span class="detail">Saved in settings store, loaded on startup</span></div></li>
+      <li><div class="checkbox"></div><div>Migrate hardcoded key checks (Ctrl+Escape to quit) to ShortcutManager<span class="detail">Remove raw SDL_KEYDOWN checks from main.cpp, use registered shortcuts</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 5E -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">5E</span>
+      <span class="subphase-title">Context Menu System</span>
+    </div>
+    <div class="subphase-summary">Right-click menus for windows, dock items, sidebar items, and in-app elements.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">ContextMenu</span> class: list of <span class="code">MenuItem{label, icon, shortcut, action, enabled, separator}</span><span class="detail">Hierarchical menu with optional icons, keyboard shortcuts displayed, and dividers</span></div></li>
+      <li><div class="checkbox"></div><div>Implement context menu renderer: frosted-glass popup at cursor position<span class="detail">Styled consistently with OS theme. Auto-position to stay on screen.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">on_context_menu(x, y) &rarr; ContextMenu</span> to AppContent<span class="detail">Apps return a menu definition; OS renders and routes selection back to app</span></div></li>
+      <li><div class="checkbox"></div><div>Add window titlebar context menu: Close, Minimize, Maximize, Move, Resize<span class="detail">Right-click titlebar shows window management options</span></div></li>
+      <li><div class="checkbox"></div><div>Add dock context menu: Close, Pin/Unpin, New Window<span class="detail">Right-click dock icon shows app-level actions</span></div></li>
+      <li><div class="checkbox"></div><div>Add sub-menu support for nested options<span class="detail">Hover over arrow item expands sub-menu to the right</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 5F -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">5F</span>
+      <span class="subphase-title">File Manager App</span>
+    </div>
+    <div class="subphase-summary">Browse, open, rename, and delete files within the HerOS virtual filesystem.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Create <span class="code">FileManagerApp</span> with dual-pane or single-pane view<span class="detail">Tree view sidebar + file list. Navigate directories, preview files.</span></div></li>
+      <li><div class="checkbox"></div><div>Implement directory listing with icons by file type<span class="detail">Different icons for folders, text files, JSON files, images</span></div></li>
+      <li><div class="checkbox"></div><div>Add file operations: create, rename, delete, move, copy (via context menu)<span class="detail">All operations go through VFS API</span></div></li>
+      <li><div class="checkbox"></div><div>Double-click file to open with associated app<span class="detail">Uses file association system from Phase 3C</span></div></li>
+      <li><div class="checkbox"></div><div>Add breadcrumb navigation bar showing current path<span class="detail">Click any path segment to navigate up</span></div></li>
+      <li><div class="checkbox"></div><div>Add file search within current directory<span class="detail">Filter visible files by typing in search bar</span></div></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- PHASE 6: THEMING & COMPOSITING                                 -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="phase">
+  <div class="phase-header">
+    <div class="phase-number">06</div>
+    <div>
+      <div class="phase-title">Theming, Widgets &amp; Layout</div>
+      <div style="font-size:10px; color:var(--text-dim);">Visual consistency, reusable components, and data-driven rendering</div>
+    </div>
+    <div class="phase-priority priority-low">CAN INTERLEAVE</div>
+  </div>
+
+  <!-- 6A -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">6A</span>
+      <span class="subphase-title">Theme Engine</span>
+    </div>
+    <div class="subphase-summary">Extract all hardcoded colors, spacing, and radii into a single Theme object. Support dark/light modes and custom accent colors.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">Theme</span> struct: background, surface, border, text, text_dim, accent, error, success, warning<span class="detail">Complete color palette. Every render function reads from theme, not inline SDL_Color literals.</span></div></li>
+      <li><div class="checkbox"></div><div>Add spacing tokens: <span class="code">pad_xs</span>, <span class="code">pad_sm</span>, <span class="code">pad_md</span>, <span class="code">pad_lg</span>, <span class="code">pad_xl</span><span class="detail">Consistent spacing values: 4, 8, 12, 16, 24px</span></div></li>
+      <li><div class="checkbox"></div><div>Add typography tokens: <span class="code">font_size_body</span>, <span class="code">font_size_title</span>, <span class="code">line_height</span><span class="detail">Font sizes and line heights tied to theme</span></div></li>
+      <li><div class="checkbox"></div><div>Add radius tokens: <span class="code">radius_sm</span>, <span class="code">radius_md</span>, <span class="code">radius_lg</span>, <span class="code">radius_full</span><span class="detail">Border radii: 4, 8, 12, 9999px</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">ThemeDark</span> and <span class="code">ThemeLight</span> presets<span class="detail">Two built-in themes. Dark is current aesthetic; Light is new.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">ThemeManager</span> with <span class="code">set_theme()</span> and <span class="code">ThemeChanged</span> event<span class="detail">Switching theme emits event; all components re-read theme values on next frame</span></div></li>
+      <li><div class="checkbox"></div><div>Add accent color customization: pick any color, auto-generate palette<span class="detail">User picks one accent color; generate lighter/darker variants automatically</span></div></li>
+      <li><div class="checkbox"></div><div>Migrate all hardcoded colors in ui.cpp, window.cpp, and apps to use theme<span class="detail">Large refactor but critical for visual consistency</span></div></li>
+      <li><div class="checkbox"></div><div>Add theme to <span class="code">RenderCtx</span>: every render function gets theme access<span class="detail">RenderCtx gains a Theme* pointer alongside fonts and frost</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 6B -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">6B</span>
+      <span class="subphase-title">Widget Library</span>
+    </div>
+    <div class="subphase-summary">Reusable UI components that apps compose from instead of drawing raw primitives. Consistent behavior and appearance everywhere.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Create <span class="code">Button</span> widget: label, icon, onClick, variants (primary, secondary, ghost, danger)<span class="detail">Handles hover, press, disabled states. Renders consistently across all apps.</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">TextInput</span> widget: single-line text entry with cursor, selection, placeholder<span class="detail">Reusable text field. Journal's title field and search bar use this.</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">TextArea</span> widget: multi-line text editor extracted from JournalApp<span class="detail">Journal's editor becomes a reusable widget. Word-wrap, cursor, scroll built in.</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">ScrollView</span> widget: scrollable container with scrollbar<span class="detail">Wraps any content taller than view. Handles mouse wheel, click-drag scrollbar.</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">Card</span> widget: frosted-glass container with optional title and padding<span class="detail">Replaces repeated frosted panel + rounded rect + title pattern in every render function</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">ListView</span> widget: scrollable list with selectable items, hover states<span class="detail">Used by Journal entry list, Task Manager process list, File Manager, etc.</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">TabBar</span> widget: horizontal or vertical tab strip<span class="detail">Journal's NavTab rendering becomes a reusable widget</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">ProgressBar</span> widget: horizontal bar with fill, label, color<span class="detail">Used in Finance budget bars, Goals progress, download indicators</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">Toggle</span> widget: on/off switch for boolean settings<span class="detail">Used in Settings app for enable/disable options</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">Dialog</span> widget: modal overlay with title, body, action buttons<span class="detail">"Unsaved changes" dialog, confirmation dialogs, error dialogs</span></div></li>
+      <li><div class="checkbox"></div><div>Create <span class="code">Tooltip</span> widget: hover popup with text<span class="detail">Appears after 500ms hover delay, positioned near cursor</span></div></li>
+      <li><div class="checkbox"></div><div>Add focus/tab navigation between widgets<span class="detail">Tab key moves focus between interactive widgets within an app</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 6C -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">6C</span>
+      <span class="subphase-title">Layout Engine</span>
+    </div>
+    <div class="subphase-summary">Replace manual pixel math with a declarative layout system. Widgets flow and resize automatically.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">Layout</span> primitives: <span class="code">VStack</span>, <span class="code">HStack</span>, <span class="code">Spacer</span>, <span class="code">Padding</span><span class="detail">Vertical/horizontal stacking with configurable gaps. Spacer fills available space.</span></div></li>
+      <li><div class="checkbox"></div><div>Add size constraints: <span class="code">fixed(px)</span>, <span class="code">flex(weight)</span>, <span class="code">min(px)</span>, <span class="code">max(px)</span>, <span class="code">fill</span><span class="detail">Children can request fixed sizes or flex to fill remaining space</span></div></li>
+      <li><div class="checkbox"></div><div>Implement layout calculation pass: measure &rarr; arrange &rarr; render<span class="detail">Two-pass layout: first measure preferred sizes, then arrange within constraints</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">Grid</span> layout: rows &times; columns with cell spanning<span class="detail">Finance dashboard uses grid layout for card arrangement</span></div></li>
+      <li><div class="checkbox"></div><div>Add alignment options: <span class="code">start</span>, <span class="code">center</span>, <span class="code">end</span>, <span class="code">stretch</span> per axis<span class="detail">Control how children are positioned within their allocated space</span></div></li>
+      <li><div class="checkbox"></div><div>Cache layout results: only recalculate when container size changes<span class="detail">Avoid layout computation every frame &mdash; only on resize or content change</span></div></li>
+      <li><div class="checkbox"></div><div>Migrate Finance app card layout from manual coordinates to layout engine<span class="detail">Replace PAD/GAP/HEADER_H constants with VStack + HStack + Cards</span></div></li>
+      <li><div class="checkbox"></div><div>Migrate Journal app pane layout to layout engine<span class="detail">Nav + List/Edit split becomes HStack with fixed nav width and flex content</span></div></li>
+    </ul>
+  </div>
+
+  <!-- 6D -->
+  <div class="subphase">
+    <div class="subphase-header">
+      <span class="subphase-id">6D</span>
+      <span class="subphase-title">Animation &amp; Transitions</span>
+    </div>
+    <div class="subphase-summary">Smooth transitions for window operations, view changes, and widget state changes.</div>
+    <ul class="checklist">
+      <li><div class="checkbox"></div><div>Define <span class="code">Animation</span> class: <span class="code">duration</span>, <span class="code">easing</span>, <span class="code">from</span>, <span class="code">to</span>, <span class="code">on_update</span>, <span class="code">on_complete</span><span class="detail">Generic tween system. Easing functions: linear, ease-in, ease-out, ease-in-out.</span></div></li>
+      <li><div class="checkbox"></div><div>Add <span class="code">AnimationManager</span>: tick all active animations each frame<span class="detail">Called in main loop before render. Updates animated values based on elapsed time.</span></div></li>
+      <li><div class="checkbox"></div><div>Animate window minimize: shrink to dock position<span class="detail">Window scales down and slides toward its dock icon position</span></div></li>
+      <li><div class="checkbox"></div><div>Animate window restore: expand from dock to target position<span class="detail">Reverse of minimize animation</span></div></li>
+      <li><div class="checkbox"></div><div>Animate window open: fade in + slight scale up<span class="detail">New windows appear with a brief 200ms fade-scale animation</span></div></li>
+      <li><div class="checkbox"></div><div>Animate view transitions in apps: slide between views<span class="detail">Journal list &rarr; edit slides left; back slides right</span></div></li>
+      <li><div class="checkbox"></div><div>Animate toast notifications: slide in from right, fade out on dismiss<span class="detail">Smooth entry and exit for notification toasts</span></div></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- EXECUTION ORDER / DEPENDENCY GRAPH                             -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="dep-graph">
+  <h2>Execution Order &amp; Dependencies</h2>
+  <pre>
+  <span class="highlight">Phase 1A+1B</span>  App Registry + Factory              <span class="arrow">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>  <span class="highlight">START HERE</span>
+       <span class="arrow">│</span>
+       <span class="arrow">▼</span>
+  <span class="highlight">Phase 1C+1D+1E</span>  Lifecycle + Dock + AppContext       <span class="arrow">━━━━━━━━━━━━━━━━━━</span>  unlocks dynamic apps
+       <span class="arrow">│</span>
+       <span class="arrow">├───────────────────────────┐</span>
+       <span class="arrow">▼</span>                           <span class="arrow">▼</span>
+  <span class="highlight">Phase 2A+2B</span>  Process Table + Shutdown      <span class="highlight">Phase 6A</span>  Theme Engine (can start early)
+       <span class="arrow">│</span>                                <span class="arrow">│</span>
+       <span class="arrow">▼</span>                                <span class="arrow">▼</span>
+  <span class="highlight">Phase 2C+2D</span>  Services + Sessions           <span class="highlight">Phase 6B</span>  Widget Library
+       <span class="arrow">│</span>                                <span class="arrow">│</span>
+       <span class="arrow">▼</span>                                <span class="arrow">▼</span>
+  <span class="highlight">Phase 3A+3B</span>  VFS + Settings                <span class="highlight">Phase 6C+6D</span>  Layout + Animation
+       <span class="arrow">│</span>
+       <span class="arrow">▼</span>
+  <span class="highlight">Phase 3C+3D</span>  File Assoc + Finance Data
+       <span class="arrow">│</span>
+       <span class="arrow">▼</span>
+  <span class="highlight">Phase 4A+4B</span>  Event Bus + Clipboard
+       <span class="arrow">│</span>
+       <span class="arrow">▼</span>
+  <span class="highlight">Phase 4C+4D+4E</span>  DnD + Notifications + Messaging
+       <span class="arrow">│</span>
+       <span class="arrow">▼</span>
+  <span class="highlight">Phase 5A-5F</span>  Task Manager, Settings App, Search, Shortcuts, Context Menus, File Manager
+  </pre>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- CURRENT FILE REFERENCE                                         -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="files-ref">
+  <h2>Current Source File Reference</h2>
+  <table class="file-table">
+    <thead>
+      <tr><th>File</th><th>Responsibility</th><th>Lines</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>src/main.cpp</td><td>Entry point, SDL init, event loop, dock click intercept</td><td>192</td></tr>
+      <tr><td>src/window.h</td><td>Window/AppContent/WindowManager interfaces + Window struct</td><td>173</td></tr>
+      <tr><td>src/window.cpp</td><td>Window manager implementation: drag, resize, focus, z-order, event routing</td><td>501</td></tr>
+      <tr><td>src/ui.h</td><td>RenderCtx struct, UI function declarations</td><td>19</td></tr>
+      <tr><td>src/ui.cpp</td><td>Topbar, sidebars, dock, background rendering, default window setup</td><td>300</td></tr>
+      <tr><td>src/draw.h</td><td>Drawing API, Icon enum (31 icons), Fonts struct</td><td>—</td></tr>
+      <tr><td>src/draw.cpp</td><td>Rendering primitives: text, circles, rounded rects, glow, lines, icons</td><td>534</td></tr>
+      <tr><td>src/frost.h</td><td>FrostRenderer class interface</td><td>—</td></tr>
+      <tr><td>src/frost.cpp</td><td>Frosted glass effect with 8x downscale blur</td><td>57</td></tr>
+      <tr><td>src/apps/journal_app.h</td><td>JournalEntry model, ViewMode/NavTab enums, JournalApp class</td><td>122</td></tr>
+      <tr><td>src/apps/journal_app.cpp</td><td>Full journal: text editor, persistence, multi-view, word-wrap</td><td>1,201</td></tr>
+      <tr><td>src/apps/finance_app.h</td><td>FinanceApp class interface</td><td>27</td></tr>
+      <tr><td>src/apps/finance_app.cpp</td><td>Finance dashboard: cards, donut chart, progress bars (hardcoded data)</td><td>434</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ -->
+<!-- FOOTER                                                         -->
+<!-- ════════════════════════════════════════════════════════════════ -->
+
+<div class="footer">
+  HerOS Architecture Roadmap &bull; Generated 2026-05-22 &bull; 6 Phases &bull; 26 Sub-phases &bull; 195+ Tasks
+</div>
+
+</body>
+</html>
