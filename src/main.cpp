@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "app_registry.h"
 #include "process.h"
+#include "vfs.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -159,6 +160,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
     int prev_w = INIT_W, prev_h = INIT_H;
     frost.init(renderer, prev_w, prev_h);
 
+    // Virtual filesystem + settings
+    FileSystem vfs;
+    SystemSettings sys_settings(vfs);
+
     // App registry — single source of truth for installed apps
     AppRegistry registry;
     register_builtin_apps(registry);
@@ -166,6 +171,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Window manager + process manager
     WindowManager wm;
     ProcessManager pm;
+
+    // Wire system services into registry so apps get them via context
+    registry.set_system(&pm, &vfs, &sys_settings);
 
     // Launch autostart apps through process manager
     int sw, sh;

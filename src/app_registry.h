@@ -47,8 +47,17 @@ using AppFactory = std::function<std::unique_ptr<AppContent>()>;
 
 // ── App Registry — single source of truth for installed apps ────
 
+class FileSystem;
+class SystemSettings;
+class ProcessManager;
+
 class AppRegistry {
 public:
+    // Set system-level pointers (called once at startup)
+    void set_system(ProcessManager* pm, FileSystem* fs, SystemSettings* settings) {
+        pm_ = pm; fs_ = fs; settings_ = settings;
+    }
+
     // Registration
     bool register_app(const AppManifest& manifest, AppFactory factory);
 
@@ -88,6 +97,9 @@ private:
     };
 
     std::unordered_map<std::string, AppEntry> apps_;
+    ProcessManager* pm_ = nullptr;
+    FileSystem* fs_ = nullptr;
+    SystemSettings* settings_ = nullptr;
     std::vector<RunningInstance> running_;
 };
 

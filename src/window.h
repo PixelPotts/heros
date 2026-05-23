@@ -41,11 +41,18 @@ enum WindowFlags : uint32_t {
 class AppRegistry;
 class WindowManager;
 
+class FileSystem;
+class SystemSettings;
+class ProcessManager;
+
 struct AppContext {
     int window_id = 0;
     std::string app_id;
     WindowManager* wm = nullptr;
     AppRegistry* registry = nullptr;
+    ProcessManager* pm = nullptr;
+    FileSystem* fs = nullptr;
+    SystemSettings* settings = nullptr;
     int screen_w = 0, screen_h = 0;
 
     // Request the OS to close this app's window
