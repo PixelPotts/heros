@@ -180,6 +180,9 @@ int AppRegistry::launch(const std::string& app_id, WindowManager& wm,
             actx.pm = pm_;
             actx.fs = fs_;
             actx.settings = settings_;
+            actx.bus = bus_;
+            actx.clipboard = clipboard_;
+            actx.notifications = notifications_;
             actx.screen_w = screen_w;
             actx.screen_h = screen_h;
             win->content->set_context(actx);

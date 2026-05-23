@@ -2,6 +2,7 @@
 #include "app_registry.h"
 #include "process.h"
 #include "vfs.h"
+#include "event_bus.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -164,6 +165,13 @@ int main(int /*argc*/, char* /*argv*/[]) {
     FileSystem vfs;
     SystemSettings sys_settings(vfs);
 
+    // Event bus + clipboard + notifications
+    EventBus bus;
+    Clipboard clipboard;
+    clipboard.set_event_bus(&bus);
+    NotificationManager notifications;
+    notifications.set_event_bus(&bus);
+
     // App registry — single source of truth for installed apps
     AppRegistry registry;
     register_builtin_apps(registry);
@@ -173,7 +181,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     ProcessManager pm;
 
     // Wire system services into registry so apps get them via context
-    registry.set_system(&pm, &vfs, &sys_settings);
+    registry.set_system(&pm, &vfs, &sys_settings, &bus, &clipboard, &notifications);
 
     // Launch autostart apps through process manager
     int sw, sh;
@@ -218,6 +226,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         pm.tick(wm);
         pm.sync(wm, registry);
 
+        // Notification manager: expire old toasts
+        notifications.tick(SDL_GetTicks());
+
         // 1. Render scene to frost target
         SDL_SetRenderTarget(renderer, frost.scene_target());
         render_background(renderer, wallpaper, w, h);
@@ -236,6 +247,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         render_right_sidebar(ctx);
         wm.render(ctx);
         render_dock(ctx, wm, registry);
+
+        // Render toast notifications on top of everything
+        notifications.render(renderer, &fonts, w);
 
         SDL_RenderPresent(renderer);
         SDL_Delay(16);

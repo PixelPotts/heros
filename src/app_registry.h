@@ -50,12 +50,18 @@ using AppFactory = std::function<std::unique_ptr<AppContent>()>;
 class FileSystem;
 class SystemSettings;
 class ProcessManager;
+class EventBus;
+class Clipboard;
+class NotificationManager;
 
 class AppRegistry {
 public:
     // Set system-level pointers (called once at startup)
-    void set_system(ProcessManager* pm, FileSystem* fs, SystemSettings* settings) {
+    void set_system(ProcessManager* pm, FileSystem* fs, SystemSettings* settings,
+                    EventBus* bus = nullptr, Clipboard* clip = nullptr,
+                    NotificationManager* notif = nullptr) {
         pm_ = pm; fs_ = fs; settings_ = settings;
+        bus_ = bus; clipboard_ = clip; notifications_ = notif;
     }
 
     // Registration
@@ -100,6 +106,9 @@ private:
     ProcessManager* pm_ = nullptr;
     FileSystem* fs_ = nullptr;
     SystemSettings* settings_ = nullptr;
+    EventBus* bus_ = nullptr;
+    Clipboard* clipboard_ = nullptr;
+    NotificationManager* notifications_ = nullptr;
     std::vector<RunningInstance> running_;
 };
 
