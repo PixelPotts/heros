@@ -35,6 +35,14 @@ $(BUILD_DIR):
 # ── App shared libraries ─────────────────────────────────────────
 apps: $(APP_SOS)
 
+# ── Terminal app needs extra libraries (curl, ssl, zlib, archive) ─
+TERMINAL_LIBS := -lcurl -lssl -lcrypto -lz -larchive
+
+$(BUILD_DIR)/apps/terminal_app.so: $(SRC_DIR)/apps/terminal_app.cpp | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -shared -o $@ $< $(TERMINAL_LIBS)
+
+# ── All other apps (default rule, must come after specific rules) ─
 $(BUILD_DIR)/apps/%.so: $(SRC_DIR)/apps/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -shared -o $@ $<
@@ -61,7 +69,11 @@ install-apps: apps
 	@mkdir -p $(APPS_DIR)/com.heros.files
 	@cp $(BUILD_DIR)/apps/filemanager_app.so $(APPS_DIR)/com.heros.files/files.so
 	@printf 'app_id=com.heros.files\nname=Files\nicon=book\ncategory=system\nlibrary=files.so\nsingleton=true\nstart_centered=true\ndock_pinned=true\ndock_order=7\ndefault_w=750\ndefault_h=500\nmin_w=400\nmin_h=300\n' > $(APPS_DIR)/com.heros.files/manifest.conf
-	@echo "Installed 5 app bundles to $(APPS_DIR)"
+	@# Terminal
+	@mkdir -p $(APPS_DIR)/com.heros.terminal
+	@cp $(BUILD_DIR)/apps/terminal_app.so $(APPS_DIR)/com.heros.terminal/terminal.so
+	@printf 'app_id=com.heros.terminal\nname=Terminal\nicon=grid\ncategory=system\nlibrary=terminal.so\nsingleton=false\nstart_centered=true\ndock_pinned=true\ndock_order=2\ndefault_w=820\ndefault_h=520\nmin_w=400\nmin_h=300\n' > $(APPS_DIR)/com.heros.terminal/manifest.conf
+	@echo "Installed 6 app bundles to $(APPS_DIR)"
 
 run: $(TARGET)
 	./$(TARGET)

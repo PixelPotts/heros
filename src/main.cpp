@@ -223,6 +223,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
         SDL_GetWindowSize(window, &sw2, &sh2);
         registry.launch("com.heros.files", wm, sw2, sh2);
     });
+    shortcuts.bind("wm.terminal", SDLK_t, KMOD_CTRL | KMOD_ALT, [&]() {
+        int sw2, sh2;
+        SDL_GetWindowSize(window, &sw2, &sh2);
+        registry.launch("com.heros.terminal", wm, sw2, sh2);
+    });
 
     bool running = true;
     SDL_Event event;
@@ -254,6 +259,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
                 // Only show desktop context menu if not clicking on a window
                 std::vector<MenuItem> items = {
+                    {"Terminal", "Ctrl+Alt+T", Icon::Grid, true, false, [&]() {
+                        registry.launch("com.heros.terminal", wm, w2, h2);
+                    }},
                     {"Settings", "Ctrl+,", Icon::Gear, true, false, [&]() {
                         registry.launch("com.heros.settings", wm, w2, h2);
                     }},
