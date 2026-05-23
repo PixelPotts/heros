@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "app_registry.h"
+#include "process.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -34,13 +35,14 @@ static SDL_Texture* load_wallpaper(SDL_Renderer* r) {
     return tex;
 }
 
-// ── Launch autostart apps ───────────────────────────────────────
+// ── Launch autostart apps via ProcessManager ────────────────────
 
-static void launch_autostart_apps(AppRegistry& registry, WindowManager& wm,
+static void launch_autostart_apps(ProcessManager& pm, AppRegistry& registry,
+                                   WindowManager& wm,
                                    int screen_w, int screen_h) {
     for (auto* m : registry.list_apps()) {
         if (m->autostart) {
-            registry.launch(m->app_id, wm, screen_w, screen_h);
+            pm.spawn(m->app_id, registry, wm, screen_w, screen_h);
         }
     }
 }
@@ -99,25 +101,7 @@ static bool handle_sidebar_click(int mx, int my, int screen_w, int screen_h,
     return true;
 }
 
-// ── Track window closures ───────────────────────────────────────
-
-static void sync_running_state(AppRegistry& registry, const WindowManager& wm) {
-    // Simple approach: rebuild from current WM state each frame would be expensive.
-    // Instead, detect closed windows by checking if tracked windows still exist.
-    // This is called once per frame — cheap since running_ is small.
-    std::vector<int> to_remove;
-    // We need access to running instances — use the public API
-    // Check each running app's window still exists in WM
-    for (auto* m : registry.list_apps()) {
-        int wid = registry.find_window_for_app(m->app_id);
-        if (wid >= 0 && !wm.find_window(wid)) {
-            to_remove.push_back(wid);
-        }
-    }
-    for (int wid : to_remove) {
-        registry.on_window_closed(wid);
-    }
-}
+// (sync is now handled by ProcessManager::sync)
 
 int main(int /*argc*/, char* /*argv*/[]) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -179,13 +163,14 @@ int main(int /*argc*/, char* /*argv*/[]) {
     AppRegistry registry;
     register_builtin_apps(registry);
 
-    // Window manager
+    // Window manager + process manager
     WindowManager wm;
+    ProcessManager pm;
 
-    // Launch autostart apps (replaces hardcoded setup_default_windows)
+    // Launch autostart apps through process manager
     int sw, sh;
     SDL_GetWindowSize(window, &sw, &sh);
-    launch_autostart_apps(registry, wm, sw, sh);
+    launch_autostart_apps(pm, registry, wm, sw, sh);
 
     bool running = true;
     SDL_Event event;
@@ -221,8 +206,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
             prev_w = w; prev_h = h;
         }
 
-        // Sync registry with WM (detect closed windows)
-        sync_running_state(registry, wm);
+        // Process manager: tick services, sync with WM
+        pm.tick(wm);
+        pm.sync(wm, registry);
 
         // 1. Render scene to frost target
         SDL_SetRenderTarget(renderer, frost.scene_target());
