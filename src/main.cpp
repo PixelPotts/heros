@@ -5,6 +5,7 @@
 #include "event_bus.h"
 #include "shortcuts.h"
 #include "context_menu.h"
+#include "theme.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -185,6 +186,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Wire system services into registry so apps get them via context
     registry.set_system(&pm, &vfs, &sys_settings, &bus, &clipboard, &notifications);
 
+    // Theme manager
+    ThemeManager theme_mgr;
+
     // Keyboard shortcuts
     ShortcutManager shortcuts;
     ContextMenu ctx_menu;
@@ -314,7 +318,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         frost.render_scene(renderer);
 
         // 4. Render UI components
-        RenderCtx ctx = {renderer, &frost, &fonts, w, h};
+        RenderCtx ctx = {renderer, &frost, &fonts, w, h, &theme_mgr};
         render_topbar(ctx);
         render_left_sidebar(ctx, registry);
         render_right_sidebar(ctx);

@@ -2,12 +2,14 @@
 #include "draw.h"
 #include "frost.h"
 #include "window.h"
+#include "theme.h"
 
 struct RenderCtx {
     SDL_Renderer* r;
     FrostRenderer* frost;
     Fonts* fonts;
     int w, h;
+    const ThemeManager* theme = nullptr;
 };
 
 class AppRegistry;  // forward declare
