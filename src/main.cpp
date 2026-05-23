@@ -14,6 +14,7 @@
 #include "workspaces.h"
 #include "power.h"
 #include "animation.h"
+#include "file_assoc.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -219,6 +220,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Theme manager
     ThemeManager theme_mgr;
 
+    // File association manager
+    FileAssocManager file_assoc;
+    file_assoc.init();
+
     // Animation manager
     AnimationManager animations;
     wm.set_animations(&animations);
@@ -338,6 +343,25 @@ int main(int /*argc*/, char* /*argv*/[]) {
             if (event.type == SDL_KEYDOWN) {
                 if (shortcuts.handle_key(event.key.keysym.sym, event.key.keysym.mod))
                     continue;
+            }
+
+            // File association "Open With" dialog
+            if (file_assoc.dialog_open()) {
+                if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+                    int w2, h2;
+                    SDL_GetWindowSize(window, &w2, &h2);
+                    file_assoc.handle_click(event.button.x, event.button.y, registry, wm, w2, h2);
+                    continue;
+                }
+                if (event.type == SDL_MOUSEMOTION) {
+                    int w2, h2;
+                    SDL_GetWindowSize(window, &w2, &h2);
+                    file_assoc.on_mouse_move(event.motion.x, event.motion.y, w2, h2);
+                }
+                if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+                    file_assoc.close_dialog();
+                    continue;
+                }
             }
 
             // Workspace switcher
@@ -532,6 +556,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
         // Workspace switcher overlay
         workspaces.render_switcher(renderer, &fonts, wm, w, h);
+
+        // File association dialog
+        file_assoc.render_dialog(renderer, &fonts, w, h);
 
         // App launcher overlay
         launcher.render(renderer, &frost, &fonts, w, h);
