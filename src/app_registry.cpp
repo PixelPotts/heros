@@ -4,6 +4,25 @@
 #include <cstdio>
 #include <algorithm>
 
+// ── AppContext implementation ───────────────────────────────────
+
+void AppContext::request_close() {
+    if (wm) wm->close_window(window_id);
+}
+
+void AppContext::set_title(const std::string& title) {
+    if (wm) {
+        Window* w = wm->find_window(window_id);
+        if (w) w->title = title;
+    }
+}
+
+int AppContext::launch_app(const std::string& target_app_id) {
+    if (registry && wm)
+        return registry->launch(target_app_id, *wm, screen_w, screen_h);
+    return -1;
+}
+
 // ── Registration ────────────────────────────────────────────────
 
 bool AppRegistry::register_app(const AppManifest& manifest, AppFactory factory) {
@@ -147,10 +166,21 @@ int AppRegistry::launch(const std::string& app_id, WindowManager& wm,
         return -1;
     }
 
-    // Apply min size
+    // Apply min size + set app context
     auto* win = wm.find_window(win_id);
     if (win) {
         win->min_w = manifest.min_w;
+        // Wire app context so the app can call back into the OS
+        if (win->content) {
+            AppContext actx;
+            actx.window_id = win_id;
+            actx.app_id = app_id;
+            actx.wm = &wm;
+            actx.registry = this;
+            actx.screen_w = screen_w;
+            actx.screen_h = screen_h;
+            win->content->set_context(actx);
+        }
         win->min_h = manifest.min_h;
     }
 

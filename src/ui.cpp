@@ -97,37 +97,53 @@ void render_topbar(const RenderCtx& ctx) {
 
 // ── Left Sidebar ────────────────────────────────────────────────
 
-void render_left_sidebar(const RenderCtx& ctx) {
-    int sx = 8, sy = 44;
-    int sw = 180, sh = ctx.h - 108;
+// Sidebar nav items — maps label + icon to app_id (empty = decorative)
+struct SidebarItem {
+    const char* label;
+    Icon icon;
+    const char* app_id; // empty string = no app linked
+};
+
+static const SidebarItem SIDEBAR_ITEMS[] = {
+    {"Sanctum",  Icon::Flower,    ""},
+    {"Library",  Icon::Book,      ""},
+    {"Journal",  Icon::Journal,   "com.heros.journal"},
+    {"Finance",  Icon::Briefcase, "com.heros.finance"},
+    {"Attune",   Icon::Sliders,   ""},
+    {"Explore",  Icon::Compass,   ""},
+    {"Communal", Icon::People,    ""},
+    {"Settings", Icon::Gear,      "com.heros.settings"},
+};
+static const int SIDEBAR_COUNT = 8;
+static const int SIDEBAR_X = 8, SIDEBAR_Y = 44, SIDEBAR_W = 180;
+static const int SIDEBAR_ITEM_H = 34;
+
+void render_left_sidebar(const RenderCtx& ctx, const AppRegistry& registry) {
+    int sx = SIDEBAR_X, sy = SIDEBAR_Y;
+    int sw = SIDEBAR_W, sh = ctx.h - 108;
     SDL_Rect panel = {sx, sy, sw, sh};
     ctx.frost->render_panel(ctx.r, panel, {12, 15, 28, 150});
     draw::rounded_rect(ctx.r, panel, 10, {180, 195, 220, 30});
 
-    struct NavItem { const char* label; Icon icon; };
-    NavItem items[] = {
-        {"Sanctum",  Icon::Flower},
-        {"Library",  Icon::Book},
-        {"Journal",  Icon::Journal},
-        {"Work",     Icon::Briefcase},
-        {"Attune",   Icon::Sliders},
-        {"Explore",  Icon::Compass},
-        {"Communal", Icon::People},
-        {"Settings", Icon::Gear},
-    };
-
     int iy = sy + 12;
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < SIDEBAR_COUNT; i++) {
         SDL_Rect item_rect = {sx + 6, iy, sw - 12, 30};
-        if (i == 0) { // Active
-            draw::filled_rounded_rect(ctx.r, item_rect, 6, {100, 150, 255, 30});
-            draw::icon(ctx.r, items[i].icon, sx + 22, iy + 15, 16, ACCENT);
-            draw::text(ctx.r, ctx.fonts->body, items[i].label, sx + 38, iy + 7, WHITE);
-        } else {
-            draw::icon(ctx.r, items[i].icon, sx + 22, iy + 15, 16, DIM);
-            draw::text(ctx.r, ctx.fonts->body, items[i].label, sx + 38, iy + 7, DIM);
+
+        // Highlight if this nav item's app is running
+        bool is_active = false;
+        if (SIDEBAR_ITEMS[i].app_id[0] != '\0') {
+            is_active = registry.is_running(SIDEBAR_ITEMS[i].app_id);
         }
-        iy += 34;
+
+        if (is_active) {
+            draw::filled_rounded_rect(ctx.r, item_rect, 6, {100, 150, 255, 30});
+            draw::icon(ctx.r, SIDEBAR_ITEMS[i].icon, sx + 22, iy + 15, 16, ACCENT);
+            draw::text(ctx.r, ctx.fonts->body, SIDEBAR_ITEMS[i].label, sx + 38, iy + 7, WHITE);
+        } else {
+            draw::icon(ctx.r, SIDEBAR_ITEMS[i].icon, sx + 22, iy + 15, 16, DIM);
+            draw::text(ctx.r, ctx.fonts->body, SIDEBAR_ITEMS[i].label, sx + 38, iy + 7, DIM);
+        }
+        iy += SIDEBAR_ITEM_H;
     }
 
     // Bottom status widget
@@ -144,6 +160,25 @@ void render_left_sidebar(const RenderCtx& ctx) {
     draw::text_centered(ctx.r, ctx.fonts->small, "All systems in harmony.", scx, by + 60, DIM);
     draw::text_centered(ctx.r, ctx.fonts->small, "Thank you.", scx, by + 76, {130, 140, 160, 180});
     draw::icon(ctx.r, Icon::ChevronUp, scx, by + bh - 6, 10, DIM);
+}
+
+// ── Sidebar click detection ─────────────────────────────────────
+
+std::string sidebar_app_at(int mx, int my, int /*screen_h*/) {
+    int sx = SIDEBAR_X, sy = SIDEBAR_Y;
+    int sw = SIDEBAR_W;
+
+    // Check bounds
+    if (mx < sx || mx >= sx + sw) return "";
+
+    int iy = sy + 12;
+    for (int i = 0; i < SIDEBAR_COUNT; i++) {
+        if (my >= iy && my < iy + 30) {
+            return SIDEBAR_ITEMS[i].app_id;
+        }
+        iy += SIDEBAR_ITEM_H;
+    }
+    return "";
 }
 
 // ── Right Sidebar ───────────────────────────────────────────────

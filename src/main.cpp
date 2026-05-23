@@ -72,6 +72,33 @@ static bool handle_dock_click(int mx, int my, int screen_w, int screen_h,
     return true;
 }
 
+// ── Handle sidebar click ────────────────────────────────────────
+
+static bool handle_sidebar_click(int mx, int my, int screen_w, int screen_h,
+                                  AppRegistry& registry, WindowManager& wm) {
+    std::string app_id = sidebar_app_at(mx, my, screen_h);
+    if (app_id.empty()) return false;
+
+    if (!registry.has_app(app_id)) return false;
+
+    // Same logic as dock: toggle or launch
+    if (registry.is_running(app_id)) {
+        int wid = registry.find_window_for_app(app_id);
+        auto* win = wm.find_window(wid);
+        if (win) {
+            if (win->minimized) {
+                wm.restore_from_dock(wid, screen_w, screen_h);
+            } else {
+                wm.bring_to_front(wid);
+                wm.set_focus(wid);
+            }
+        }
+    } else {
+        registry.launch(app_id, wm, screen_w, screen_h);
+    }
+    return true;
+}
+
 // ── Track window closures ───────────────────────────────────────
 
 static void sync_running_state(AppRegistry& registry, const WindowManager& wm) {
@@ -170,13 +197,17 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 && (event.key.keysym.mod & KMOD_CTRL))
                 running = false;
 
-            // Dock click — check before WM so dock takes priority
+            // Dock + sidebar clicks — check before WM so they take priority
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
                 int w, h;
                 SDL_GetWindowSize(window, &w, &h);
                 if (handle_dock_click(event.button.x, event.button.y, w, h,
                                       registry, wm)) {
-                    continue; // Don't pass to WM
+                    continue;
+                }
+                if (handle_sidebar_click(event.button.x, event.button.y, w, h,
+                                          registry, wm)) {
+                    continue;
                 }
             }
 
@@ -207,7 +238,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         // 4. Render UI components
         RenderCtx ctx = {renderer, &frost, &fonts, w, h};
         render_topbar(ctx);
-        render_left_sidebar(ctx);
+        render_left_sidebar(ctx, registry);
         render_right_sidebar(ctx);
         wm.render(ctx);
         render_dock(ctx, wm, registry);

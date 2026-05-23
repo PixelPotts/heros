@@ -36,6 +36,28 @@ enum WindowFlags : uint32_t {
 
 // ── Abstract app content ────────────────────────────────────────
 
+// ── App Context — app's handle to OS services ───────────────────
+
+class AppRegistry;
+class WindowManager;
+
+struct AppContext {
+    int window_id = 0;
+    std::string app_id;
+    WindowManager* wm = nullptr;
+    AppRegistry* registry = nullptr;
+    int screen_w = 0, screen_h = 0;
+
+    // Request the OS to close this app's window
+    void request_close();
+    // Update the window title dynamically
+    void set_title(const std::string& title);
+    // Launch another app
+    int launch_app(const std::string& target_app_id);
+};
+
+// ── Abstract app content ────────────────────────────────────────
+
 class AppContent {
 public:
     virtual ~AppContent() = default;
@@ -57,6 +79,13 @@ public:
     virtual void on_deactivate() {}                 // window lost focus
     virtual bool on_close() { return true; }        // return false to cancel close
     virtual void on_resize(int w, int h) { (void)w; (void)h; }  // content area resized
+
+    // ── Context ─────────────────────────────────────────────────
+    void set_context(const AppContext& ctx) { ctx_ = ctx; }
+    const AppContext& context() const { return ctx_; }
+
+protected:
+    AppContext ctx_;
 };
 
 // ── Window structure ────────────────────────────────────────────
