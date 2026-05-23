@@ -213,6 +213,9 @@ public:
     void snap_left(int id, int screen_w, int screen_h);
     void snap_right(int id, int screen_w, int screen_h);
 
+    // Animation integration
+    void set_animations(class AnimationManager* anim) { animations_ = anim; }
+
 private:
     // Event handlers
     void on_mouse_down(int mx, int my, int screen_w, int screen_h);
@@ -242,6 +245,8 @@ private:
 
     // Screen size cache (updated each event)
     int screen_w_ = 1280, screen_h_ = 720;
+
+    AnimationManager* animations_ = nullptr;
 
     // Snap preview
     SnapZone snap_preview_ = SnapZone::None;

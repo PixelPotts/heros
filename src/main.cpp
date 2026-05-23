@@ -13,6 +13,7 @@
 #include "launcher.h"
 #include "workspaces.h"
 #include "power.h"
+#include "animation.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -217,6 +218,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
     // Theme manager
     ThemeManager theme_mgr;
+
+    // Animation manager
+    AnimationManager animations;
+    wm.set_animations(&animations);
 
     // Power manager
     PowerManager power;
@@ -479,6 +484,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
         power.tick(SDL_GetTicks());
         if (power.should_quit()) running = false;
 
+        // Animation manager
+        animations.tick(SDL_GetTicks());
+        // Clean up completed close animations
+        auto closed = animations.pop_completed_closes();
+        for (int wid : closed) {
+            // Already visually gone — nothing extra needed
+            (void)wid;
+        }
+
         // 1. Render scene to frost target
         SDL_SetRenderTarget(renderer, frost.scene_target());
         render_background(renderer, wallpaper, w, h);
@@ -491,7 +505,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         frost.render_scene(renderer);
 
         // 4. Render UI components
-        RenderCtx ctx = {renderer, &frost, &fonts, w, h, &theme_mgr};
+        RenderCtx ctx = {renderer, &frost, &fonts, w, h, &theme_mgr, &animations};
         render_topbar(ctx);
         render_left_sidebar(ctx, registry);
         render_right_sidebar(ctx);

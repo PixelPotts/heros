@@ -1,5 +1,6 @@
 #include "window.h"
 #include "ui.h"
+#include "animation.h"
 #include <algorithm>
 #include <cstdio>
 
@@ -86,9 +87,12 @@ int WindowManager::open_window(const std::string& title, Icon icon, SDL_Rect rec
     }
 
     windows_.push_back(std::move(w));
+    int new_id = windows_.back().id;
     // Notify new window it's active
     if (windows_.back().content) windows_.back().content->on_activate();
-    return windows_.back().id;
+    // Trigger open animation
+    if (animations_) animations_->animate_open(new_id, windows_.back().rect);
+    return new_id;
 }
 
 void WindowManager::close_window(int id) {
@@ -564,9 +568,29 @@ void WindowManager::render(const RenderCtx& ctx) {
     for (Window* w : sorted) {
         SDL_Renderer* r = ctx.r;
 
+        // Check for animation override
+        SDL_Rect render_rect = w->rect;
+        float anim_alpha = 1.0f;
+        float anim_scale = 1.0f;
+        bool animating = false;
+
+        if (ctx.animations && ctx.animations->is_animating(w->id)) {
+            animating = ctx.animations->get_animated_state(w->id, render_rect, anim_alpha, anim_scale);
+            if (anim_alpha <= 0.01f) continue; // fully transparent, skip render
+        }
+
+        // Use animated rect for rendering
+        SDL_Rect orig_rect = w->rect;
+        if (animating) w->rect = render_rect;
+
+        // Apply alpha modulation for animations
+        Uint8 alpha_mod = (Uint8)(anim_alpha * 255);
+        (void)alpha_mod; // Used conceptually — SDL2 doesn't have per-primitive alpha easily
+
         // Shadow
         SDL_Rect shadow = {w->rect.x + 4, w->rect.y + 4, w->rect.w, w->rect.h};
-        draw::filled_rounded_rect(r, shadow, 10, {0, 0, 0, 40});
+        Uint8 shadow_a = (Uint8)(40 * anim_alpha);
+        draw::filled_rounded_rect(r, shadow, 10, {0, 0, 0, shadow_a});
 
         // Frost panel body
         ctx.frost->render_panel(r, w->rect, {10, 14, 25, 170});
@@ -625,5 +649,8 @@ void WindowManager::render(const RenderCtx& ctx) {
             w->content->render(ctx, cr);
         }
         SDL_RenderSetClipRect(r, nullptr);
+
+        // Restore original rect if animated
+        if (animating) w->rect = orig_rect;
     }
 }

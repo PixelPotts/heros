@@ -4,12 +4,15 @@
 #include "window.h"
 #include "theme.h"
 
+class AnimationManager;
+
 struct RenderCtx {
     SDL_Renderer* r;
     FrostRenderer* frost;
     Fonts* fonts;
     int w, h;
     const ThemeManager* theme = nullptr;
+    AnimationManager* animations = nullptr;
 };
 
 class AppRegistry;  // forward declare
