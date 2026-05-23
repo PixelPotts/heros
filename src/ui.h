@@ -10,10 +10,16 @@ struct RenderCtx {
     int w, h;
 };
 
+class AppRegistry;  // forward declare
+
 void render_background(SDL_Renderer* r, SDL_Texture* bg, int w, int h);
 void render_geometric_overlay(SDL_Renderer* r, int w, int h);
 void render_topbar(const RenderCtx& ctx);
 void render_left_sidebar(const RenderCtx& ctx);
 void render_right_sidebar(const RenderCtx& ctx);
-void render_dock(const RenderCtx& ctx, const WindowManager& wm);
-void setup_default_windows(WindowManager& wm, int screen_w, int screen_h);
+void render_dock(const RenderCtx& ctx, const WindowManager& wm,
+                 const AppRegistry& registry);
+
+// Dock hit detection — returns app_id of clicked icon, or "" if none
+std::string dock_app_at(int mx, int my, int screen_w, int screen_h,
+                        const WindowManager& wm, const AppRegistry& registry);

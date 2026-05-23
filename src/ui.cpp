@@ -1,6 +1,5 @@
 #include "ui.h"
-#include "apps/journal_app.h"
-#include "apps/finance_app.h"
+#include "app_registry.h"
 #include <cmath>
 #include <algorithm>
 
@@ -230,45 +229,107 @@ void render_right_sidebar(const RenderCtx& ctx) {
     }
 }
 
-// ── Dock ────────────────────────────────────────────────────────
+// ── Dock (registry-driven) ──────────────────────────────────────
 
-void render_dock(const RenderCtx& ctx, const WindowManager& wm) {
-    int dw = 380, dh = 48;
-    int dx = (ctx.w - dw) / 2;
-    int dy = ctx.h - 58;
+// Build the list of dock entries: pinned apps + running non-pinned apps
+struct DockEntry {
+    std::string app_id;
+    Icon icon;
+    bool is_running;
+    bool is_minimized;
+    bool is_focused;
+};
+
+static std::vector<DockEntry> build_dock_entries(const WindowManager& wm,
+                                                  const AppRegistry& registry) {
+    std::vector<DockEntry> entries;
+
+    // 1. Pinned apps (always shown, sorted by dock_order)
+    auto pinned = registry.list_pinned_dock_apps();
+    for (auto* m : pinned) {
+        DockEntry e;
+        e.app_id = m->app_id;
+        e.icon = m->icon;
+        e.is_running = registry.is_running(m->app_id);
+        e.is_minimized = false;
+        e.is_focused = false;
+
+        // Check window state if running
+        int wid = registry.find_window_for_app(m->app_id);
+        if (wid >= 0) {
+            auto* win = wm.find_window(wid);
+            if (win) {
+                e.is_minimized = win->minimized;
+                e.is_focused = win->active;
+            }
+        }
+        entries.push_back(e);
+    }
+
+    // 2. Running non-pinned apps (shown temporarily)
+    for (auto& win : wm.windows()) {
+        // Check if this window's app is already in pinned list
+        bool already_in_dock = false;
+        for (auto& de : entries) {
+            int wid = registry.find_window_for_app(de.app_id);
+            if (wid == win.id) { already_in_dock = true; break; }
+        }
+        if (!already_in_dock) {
+            DockEntry e;
+            e.icon = win.icon;
+            e.is_running = true;
+            e.is_minimized = win.minimized;
+            e.is_focused = win.active;
+            // Try to find app_id from registry
+            for (auto* m : registry.list_apps()) {
+                if (registry.find_window_for_app(m->app_id) == win.id) {
+                    e.app_id = m->app_id;
+                    break;
+                }
+            }
+            entries.push_back(e);
+        }
+    }
+
+    return entries;
+}
+
+static void get_dock_geometry(int screen_w, int screen_h, int num_icons,
+                               int& dx, int& dy, int& dw, int& dh, int& spacing) {
+    int min_dw = 120;
+    int per_icon = 50;
+    dw = std::max(min_dw, num_icons * per_icon + 24);
+    dh = 48;
+    dx = (screen_w - dw) / 2;
+    dy = screen_h - 58;
+    spacing = (num_icons > 0) ? (dw - 24) / num_icons : 0;
+}
+
+void render_dock(const RenderCtx& ctx, const WindowManager& wm,
+                 const AppRegistry& registry) {
+    auto entries = build_dock_entries(wm, registry);
+    int num = (int)entries.size();
+    if (num == 0) return;
+
+    int dx, dy, dw, dh, spacing;
+    get_dock_geometry(ctx.w, ctx.h, num, dx, dy, dw, dh, spacing);
+
     SDL_Rect dock = {dx, dy, dw, dh};
     ctx.frost->render_panel(ctx.r, dock, {12, 15, 28, 150});
     draw::rounded_rect(ctx.r, dock, 14, {180, 195, 220, 35});
 
-    Icon dock_icons[] = {
-        Icon::Flower, Icon::Target, Icon::Lotus, Icon::Journal,
-        Icon::Ring, Icon::Mountain, Icon::Trash
-    };
-    int num = 7;
-    int spacing = (dw - 24) / num;
     int ix = dx + 12 + spacing / 2;
-
     for (int i = 0; i < num; i++) {
-        // Check if this dock icon corresponds to an open window
-        bool has_open = false;
-        bool has_minimized = false;
-        if (i == 3) { // Journal slot
-            for (auto& w : wm.windows()) {
-                if (w.icon == Icon::Journal) {
-                    has_open = true;
-                    has_minimized = w.minimized;
-                    break;
-                }
-            }
-        }
+        auto& e = entries[i];
 
-        SDL_Color ic = has_open ? ACCENT : SDL_Color{190, 200, 220, 200};
-        draw::icon(ctx.r, dock_icons[i], ix, dy + dh / 2, 20, ic);
+        // Icon color: accent if running, dim otherwise
+        SDL_Color ic = e.is_running ? ACCENT : SDL_Color{190, 200, 220, 200};
+        draw::icon(ctx.r, e.icon, ix, dy + dh / 2, 20, ic);
 
-        if (has_open && !has_minimized) {
+        // Running indicator dot
+        if (e.is_running && !e.is_minimized) {
             draw::filled_circle(ctx.r, ix, dy + dh - 5, 2, ACCENT);
-        } else if (has_minimized) {
-            // Smaller dimmer dot for minimized
+        } else if (e.is_minimized) {
             draw::filled_circle(ctx.r, ix, dy + dh - 5, 2, DIM);
         }
 
@@ -284,17 +345,26 @@ void render_dock(const RenderCtx& ctx, const WindowManager& wm) {
     }
 }
 
-// ── Setup Default Windows ───────────────────────────────────────
+// ── Dock hit detection ──────────────────────────────────────────
 
-void setup_default_windows(WindowManager& wm, int screen_w, int screen_h) {
-    // Open Finance app maximized by default
-    SDL_Rect rect = {200, 70, 800, 500};
-    int id = wm.open_window(
-        "Finance",
-        Icon::Briefcase,
-        rect,
-        WF_Default,
-        std::make_unique<FinanceApp>()
-    );
-    wm.maximize(id, screen_w, screen_h);
+std::string dock_app_at(int mx, int my, int screen_w, int screen_h,
+                        const WindowManager& wm, const AppRegistry& registry) {
+    auto entries = build_dock_entries(wm, registry);
+    int num = (int)entries.size();
+    if (num == 0) return "";
+
+    int dx, dy, dw, dh, spacing;
+    get_dock_geometry(screen_w, screen_h, num, dx, dy, dw, dh, spacing);
+
+    // Check if click is within dock bounds
+    if (mx < dx || mx >= dx + dw || my < dy || my >= dy + dh)
+        return "";
+
+    int ix = dx + 12 + spacing / 2;
+    for (int i = 0; i < num; i++) {
+        if (mx >= ix - spacing / 2 && mx < ix + spacing / 2)
+            return entries[i].app_id;
+        ix += spacing;
+    }
+    return "";
 }

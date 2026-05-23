@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "app_registry.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -33,27 +34,62 @@ static SDL_Texture* load_wallpaper(SDL_Renderer* r) {
     return tex;
 }
 
-// ── Dock click detection ────────────────────────────────────────
+// ── Launch autostart apps ───────────────────────────────────────
 
-static int dock_icon_at(int mx, int my, int screen_w, int screen_h) {
-    int dw = 380, dh = 48;
-    int dx = (screen_w - dw) / 2;
-    int dy = screen_h - 58;
-
-    // Check if click is within dock bounds
-    if (mx < dx || mx >= dx + dw || my < dy || my >= dy + dh)
-        return -1;
-
-    int num = 7;
-    int spacing = (dw - 24) / num;
-    int ix = dx + 12 + spacing / 2;
-
-    for (int i = 0; i < num; i++) {
-        if (mx >= ix - spacing / 2 && mx < ix + spacing / 2)
-            return i;
-        ix += spacing;
+static void launch_autostart_apps(AppRegistry& registry, WindowManager& wm,
+                                   int screen_w, int screen_h) {
+    for (auto* m : registry.list_apps()) {
+        if (m->autostart) {
+            registry.launch(m->app_id, wm, screen_w, screen_h);
+        }
     }
-    return -1;
+}
+
+// ── Handle dock click — works for any registered app ────────────
+
+static bool handle_dock_click(int mx, int my, int screen_w, int screen_h,
+                               AppRegistry& registry, WindowManager& wm) {
+    std::string app_id = dock_app_at(mx, my, screen_w, screen_h, wm, registry);
+    if (app_id.empty()) return false;
+
+    // If running: toggle minimize/focus. If not running: launch.
+    if (registry.is_running(app_id)) {
+        int wid = registry.find_window_for_app(app_id);
+        auto* win = wm.find_window(wid);
+        if (win) {
+            if (win->minimized) {
+                wm.restore_from_dock(wid, screen_w, screen_h);
+            } else if (win->active) {
+                wm.minimize(wid);
+            } else {
+                wm.bring_to_front(wid);
+                wm.set_focus(wid);
+            }
+        }
+    } else {
+        registry.launch(app_id, wm, screen_w, screen_h);
+    }
+    return true;
+}
+
+// ── Track window closures ───────────────────────────────────────
+
+static void sync_running_state(AppRegistry& registry, const WindowManager& wm) {
+    // Simple approach: rebuild from current WM state each frame would be expensive.
+    // Instead, detect closed windows by checking if tracked windows still exist.
+    // This is called once per frame — cheap since running_ is small.
+    std::vector<int> to_remove;
+    // We need access to running instances — use the public API
+    // Check each running app's window still exists in WM
+    for (auto* m : registry.list_apps()) {
+        int wid = registry.find_window_for_app(m->app_id);
+        if (wid >= 0 && !wm.find_window(wid)) {
+            to_remove.push_back(wid);
+        }
+    }
+    for (int wid : to_remove) {
+        registry.on_window_closed(wid);
+    }
 }
 
 int main(int /*argc*/, char* /*argv*/[]) {
@@ -112,9 +148,17 @@ int main(int /*argc*/, char* /*argv*/[]) {
     int prev_w = INIT_W, prev_h = INIT_H;
     frost.init(renderer, prev_w, prev_h);
 
+    // App registry — single source of truth for installed apps
+    AppRegistry registry;
+    register_builtin_apps(registry);
+
     // Window manager
     WindowManager wm;
-    setup_default_windows(wm, INIT_W, INIT_H);
+
+    // Launch autostart apps (replaces hardcoded setup_default_windows)
+    int sw, sh;
+    SDL_GetWindowSize(window, &sw, &sh);
+    launch_autostart_apps(registry, wm, sw, sh);
 
     bool running = true;
     SDL_Event event;
@@ -126,23 +170,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 && (event.key.keysym.mod & KMOD_CTRL))
                 running = false;
 
-            // Dock click detection — check before WM so dock takes priority
+            // Dock click — check before WM so dock takes priority
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
                 int w, h;
                 SDL_GetWindowSize(window, &w, &h);
-                int dock_idx = dock_icon_at(event.button.x, event.button.y, w, h);
-                if (dock_idx == 3) { // Journal icon
-                    // Find journal window and restore if minimized, or minimize if visible
-                    for (auto& win : wm.windows()) {
-                        if (win.icon == Icon::Journal) {
-                            if (win.minimized) {
-                                wm.restore_from_dock(win.id, w, h);
-                            } else {
-                                wm.minimize(win.id);
-                            }
-                            break;
-                        }
-                    }
+                if (handle_dock_click(event.button.x, event.button.y, w, h,
+                                      registry, wm)) {
                     continue; // Don't pass to WM
                 }
             }
@@ -156,6 +189,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
             frost.resize(renderer, w, h);
             prev_w = w; prev_h = h;
         }
+
+        // Sync registry with WM (detect closed windows)
+        sync_running_state(registry, wm);
 
         // 1. Render scene to frost target
         SDL_SetRenderTarget(renderer, frost.scene_target());
@@ -174,7 +210,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         render_left_sidebar(ctx);
         render_right_sidebar(ctx);
         wm.render(ctx);
-        render_dock(ctx, wm);
+        render_dock(ctx, wm, registry);
 
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
