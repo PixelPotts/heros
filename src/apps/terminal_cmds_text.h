@@ -475,13 +475,27 @@ inline void register_text_commands(ShellEngine& shell) {
     shell.register_cmd("tr", [](std::vector<std::string>& args, CmdContext& ctx) -> int {
         if (args.size() < 2) { ctx.outln("tr: missing operand"); return 1; }
 
+        // Expand ranges like a-z → abcdefghijklmnopqrstuvwxyz
+        auto expand_ranges = [](const std::string& s) -> std::string {
+            std::string result;
+            for (size_t i = 0; i < s.size(); i++) {
+                if (i + 2 < s.size() && s[i + 1] == '-' && s[i + 2] >= s[i]) {
+                    for (char c = s[i]; c <= s[i + 2]; c++) result += c;
+                    i += 2;
+                } else {
+                    result += s[i];
+                }
+            }
+            return result;
+        };
+
         bool flag_d = false;
         std::string set1, set2;
         int si = 1;
 
         if (args[si] == "-d") { flag_d = true; si++; }
-        if (si < (int)args.size()) set1 = args[si++];
-        if (si < (int)args.size()) set2 = args[si++];
+        if (si < (int)args.size()) set1 = expand_ranges(args[si++]);
+        if (si < (int)args.size()) set2 = expand_ranges(args[si++]);
 
         std::string input = ctx.stdin_data;
         std::string output;

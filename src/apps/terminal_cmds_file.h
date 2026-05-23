@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <sstream>
 #include <ctime>
+#include <cstdint>
 #include <iomanip>
 #include <cmath>
 
