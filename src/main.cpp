@@ -137,11 +137,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
         return 1;
     }
 
+    // Grab keyboard so ALL keys are captured by HerOS (no Alt+Tab/Super leak)
+    SDL_SetHint(SDL_HINT_GRAB_KEYBOARD, "1");
+
     SDL_Window* window = SDL_CreateWindow(
         "HerOS",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         INIT_W, INIT_H,
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_FULLSCREEN_DESKTOP
+        | SDL_WINDOW_INPUT_GRABBED
     );
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
@@ -157,6 +161,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         IMG_Quit(); TTF_Quit(); SDL_Quit();
         return 1;
     }
+
+    // Grab all input — keyboard + mouse confined to this window
+    SDL_SetWindowGrab(window, SDL_TRUE);
 
     SDL_StartTextInput();
 
@@ -326,6 +333,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE
                 && (event.key.keysym.mod & KMOD_CTRL))
                 running = false;
+
+            // Re-grab keyboard when window gains focus (grab can fail if window wasn't focused)
+            if (event.type == SDL_WINDOWEVENT &&
+                event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED) {
+                SDL_SetWindowGrab(window, SDL_TRUE);
+            }
 
             // Track activity for idle/dim
             if (event.type == SDL_MOUSEMOTION || event.type == SDL_KEYDOWN ||
