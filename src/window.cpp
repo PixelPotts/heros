@@ -207,6 +207,89 @@ void WindowManager::restore_from_dock(int id, int screen_w, int screen_h) {
     set_focus(id);
 }
 
+// ── Window snapping ──────────────────────────────────────────────
+
+static const int SNAP_EDGE = 12;
+
+SnapZone WindowManager::detect_snap_zone(int mx, int my) const {
+    bool at_left   = (mx <= SNAP_EDGE);
+    bool at_right  = (mx >= screen_w_ - SNAP_EDGE);
+    bool at_top    = (my <= TOPBAR_H + SNAP_EDGE);
+    bool at_bottom = (my >= screen_h_ - DOCK_H - SNAP_EDGE);
+
+    if (at_top && at_left)     return SnapZone::TopLeft;
+    if (at_top && at_right)    return SnapZone::TopRight;
+    if (at_bottom && at_left)  return SnapZone::BottomLeft;
+    if (at_bottom && at_right) return SnapZone::BottomRight;
+    if (at_top)    return SnapZone::Maximize;
+    if (at_left)   return SnapZone::Left;
+    if (at_right)  return SnapZone::Right;
+    return SnapZone::None;
+}
+
+SDL_Rect WindowManager::snap_zone_rect(SnapZone zone) const {
+    int usable_h = screen_h_ - TOPBAR_H - DOCK_H;
+    int half_w = screen_w_ / 2;
+    int half_h = usable_h / 2;
+
+    switch (zone) {
+    case SnapZone::Left:        return {0, TOPBAR_H, half_w, usable_h};
+    case SnapZone::Right:       return {half_w, TOPBAR_H, screen_w_ - half_w, usable_h};
+    case SnapZone::TopLeft:     return {0, TOPBAR_H, half_w, half_h};
+    case SnapZone::TopRight:    return {half_w, TOPBAR_H, screen_w_ - half_w, half_h};
+    case SnapZone::BottomLeft:  return {0, TOPBAR_H + half_h, half_w, usable_h - half_h};
+    case SnapZone::BottomRight: return {half_w, TOPBAR_H + half_h, screen_w_ - half_w, usable_h - half_h};
+    case SnapZone::Maximize:    return {0, TOPBAR_H, screen_w_, usable_h};
+    default:                    return {0, 0, 0, 0};
+    }
+}
+
+void WindowManager::snap_window(int id, SnapZone zone, int screen_w, int screen_h) {
+    Window* w = find_window(id);
+    if (!w) return;
+
+    screen_w_ = screen_w;
+    screen_h_ = screen_h;
+
+    if (zone == SnapZone::None) return;
+    if (zone == SnapZone::Maximize) {
+        maximize(id, screen_w, screen_h);
+        return;
+    }
+
+    // Save restore rect if not already snapped/maximized
+    if (!w->maximized) {
+        w->restore_rect = w->rect;
+    }
+    w->rect = snap_zone_rect(zone);
+    w->maximized = false; // snapped, not maximized
+    if (w->content) {
+        SDL_Rect cr = w->content_rect();
+        w->content->on_resize(cr.w, cr.h);
+    }
+}
+
+void WindowManager::snap_left(int id, int screen_w, int screen_h) {
+    snap_window(id, SnapZone::Left, screen_w, screen_h);
+}
+
+void WindowManager::snap_right(int id, int screen_w, int screen_h) {
+    snap_window(id, SnapZone::Right, screen_w, screen_h);
+}
+
+void WindowManager::render_snap_preview(SDL_Renderer* r) {
+    if (snap_preview_ == SnapZone::None) return;
+
+    SDL_Rect zone = snap_zone_rect(snap_preview_);
+    // Inset slightly for visual padding
+    zone.x += 4; zone.y += 4;
+    zone.w -= 8; zone.h -= 8;
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    draw::filled_rounded_rect(r, zone, 12, {100, 150, 255, 35});
+    draw::rounded_rect(r, zone, 12, {100, 150, 255, 100});
+}
+
 void WindowManager::focus_next_topmost() {
     Window* top = nullptr;
     for (auto& w : windows_) {
@@ -373,6 +456,8 @@ void WindowManager::on_mouse_move(int mx, int my, int screen_w, int screen_h) {
             // Constrain: title bar stays on screen
             w->rect.y = std::max(TOPBAR_H, std::min(w->rect.y, screen_h - TITLEBAR_H));
             w->rect.x = std::max(-(w->rect.w - 40), std::min(w->rect.x, screen_w - 40));
+            // Show snap preview
+            snap_preview_ = detect_snap_zone(mx, my);
         } else {
             int dx = mx - drag_offset_x_;
             int dy = my - drag_offset_y_;
@@ -424,14 +509,19 @@ void WindowManager::on_mouse_move(int mx, int my, int screen_w, int screen_h) {
 
 void WindowManager::on_mouse_up(int mx, int my) {
     if (drag_mode_ != DragMode::None) {
-        // If we were resizing, notify app of new size
-        if (drag_mode_ != DragMode::Move) {
+        if (drag_mode_ == DragMode::Move && snap_preview_ != SnapZone::None) {
+            // Apply snap
+            snap_window(drag_win_id_, snap_preview_, screen_w_, screen_h_);
+            snap_preview_ = SnapZone::None;
+        } else if (drag_mode_ != DragMode::Move) {
+            // If we were resizing, notify app of new size
             Window* w = find_window(drag_win_id_);
             if (w && w->content) {
                 SDL_Rect cr = w->content_rect();
                 w->content->on_resize(cr.w, cr.h);
             }
         }
+        snap_preview_ = SnapZone::None;
         drag_mode_ = DragMode::None;
         drag_win_id_ = 0;
         return;
@@ -465,6 +555,9 @@ void WindowManager::on_key_event(const SDL_Event& event) {
 void WindowManager::render(const RenderCtx& ctx) {
     screen_w_ = ctx.w;
     screen_h_ = ctx.h;
+
+    // Render snap preview zone highlight
+    render_snap_preview(ctx.r);
 
     auto sorted = z_sorted();
 

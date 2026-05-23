@@ -257,6 +257,18 @@ int main(int /*argc*/, char* /*argv*/[]) {
     shortcuts.bind("session.lock", SDLK_l, KMOD_CTRL | KMOD_GUI, [&]() {
         lockscreen.lock();
     });
+    shortcuts.bind("wm.snap_left", SDLK_LEFT, KMOD_GUI, [&]() {
+        auto* fw = wm.focused_window();
+        if (fw) { int sw2, sh2; SDL_GetWindowSize(window, &sw2, &sh2); wm.snap_left(fw->id, sw2, sh2); }
+    });
+    shortcuts.bind("wm.snap_right", SDLK_RIGHT, KMOD_GUI, [&]() {
+        auto* fw = wm.focused_window();
+        if (fw) { int sw2, sh2; SDL_GetWindowSize(window, &sw2, &sh2); wm.snap_right(fw->id, sw2, sh2); }
+    });
+    shortcuts.bind("wm.snap_maximize", SDLK_UP, KMOD_GUI, [&]() {
+        auto* fw = wm.focused_window();
+        if (fw) { int sw2, sh2; SDL_GetWindowSize(window, &sw2, &sh2); wm.toggle_maximize(fw->id, sw2, sh2); }
+    });
 
     bool running = true;
     SDL_Event event;

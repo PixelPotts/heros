@@ -155,6 +155,19 @@ struct Window {
     HitZone hit_test(int mx, int my) const;
 };
 
+// ── Snap zone (for window snapping) ──────────────────────────────
+
+enum class SnapZone {
+    None,
+    Left,       // left half
+    Right,      // right half
+    TopLeft,    // quarter
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    Maximize    // top edge = maximize
+};
+
 // ── Drag mode ───────────────────────────────────────────────────
 
 enum class DragMode {
@@ -195,6 +208,11 @@ public:
     void toggle_maximize(int id, int screen_w, int screen_h);
     void restore_from_dock(int id, int screen_w, int screen_h);
 
+    // Snap operations
+    void snap_window(int id, SnapZone zone, int screen_w, int screen_h);
+    void snap_left(int id, int screen_w, int screen_h);
+    void snap_right(int id, int screen_w, int screen_h);
+
 private:
     // Event handlers
     void on_mouse_down(int mx, int my, int screen_w, int screen_h);
@@ -224,4 +242,10 @@ private:
 
     // Screen size cache (updated each event)
     int screen_w_ = 1280, screen_h_ = 720;
+
+    // Snap preview
+    SnapZone snap_preview_ = SnapZone::None;
+    SnapZone detect_snap_zone(int mx, int my) const;
+    SDL_Rect snap_zone_rect(SnapZone zone) const;
+    void render_snap_preview(SDL_Renderer* r);
 };
