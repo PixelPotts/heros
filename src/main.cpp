@@ -7,6 +7,7 @@
 #include "context_menu.h"
 #include "theme.h"
 #include "audio.h"
+#include "lockscreen.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -181,6 +182,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
     audio.init();
     audio.play(SystemSound::Startup);
 
+    // Lock screen / login
+    LockScreen lockscreen;
+    {
+        const char* home = getenv("HOME");
+        std::string cred_path = std::string(home ? home : "/tmp") + "/.heros/credentials.conf";
+        lockscreen.init(cred_path);
+        lockscreen.set_audio(&audio);
+    }
+
     // App registry — single source of truth for installed apps
     AppRegistry registry;
     registry.load_dynamic_apps();      // load .so plugins from ~/.heros/apps/
@@ -234,6 +244,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         SDL_GetWindowSize(window, &sw2, &sh2);
         registry.launch("com.heros.terminal", wm, sw2, sh2);
     });
+    shortcuts.bind("session.lock", SDLK_l, KMOD_CTRL | KMOD_GUI, [&]() {
+        lockscreen.lock();
+    });
 
     bool running = true;
     SDL_Event event;
@@ -244,6 +257,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE
                 && (event.key.keysym.mod & KMOD_CTRL))
                 running = false;
+
+            // Lock screen consumes all events when active
+            if (lockscreen.is_locked()) {
+                lockscreen.handle_event(event);
+                continue;
+            }
 
             // Global keyboard shortcuts
             if (event.type == SDL_KEYDOWN) {
@@ -345,6 +364,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
         // Render toast notifications on top of everything
         notifications.render(renderer, &fonts, w);
+
+        // Lock screen renders on top of ALL UI
+        lockscreen.render(renderer, &frost, &fonts, w, h, wallpaper);
 
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
