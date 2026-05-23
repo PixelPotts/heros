@@ -79,14 +79,25 @@ int WindowManager::open_window(const std::string& title, Icon icon, SDL_Rect rec
     w.active = true;
     w.visible = true;
 
-    // Deactivate all others
-    for (auto& win : windows_) win.active = false;
+    // Deactivate all others and notify
+    for (auto& win : windows_) {
+        if (win.active && win.content) win.content->on_deactivate();
+        win.active = false;
+    }
 
     windows_.push_back(std::move(w));
+    // Notify new window it's active
+    if (windows_.back().content) windows_.back().content->on_activate();
     return windows_.back().id;
 }
 
 void WindowManager::close_window(int id) {
+    // Ask app if it's OK to close
+    Window* w = find_window(id);
+    if (w && w->content && !w->content->on_close()) {
+        return; // App vetoed the close
+    }
+
     // Remove from minimized list
     minimized_ids_.erase(
         std::remove(minimized_ids_.begin(), minimized_ids_.end(), id),
@@ -131,12 +142,20 @@ void WindowManager::bring_to_front(int id) {
 }
 
 void WindowManager::set_focus(int id) {
-    for (auto& w : windows_) w.active = (w.id == id);
+    for (auto& w : windows_) {
+        bool was_active = w.active;
+        w.active = (w.id == id);
+        if (w.content) {
+            if (!was_active && w.active) w.content->on_activate();
+            if (was_active && !w.active) w.content->on_deactivate();
+        }
+    }
 }
 
 void WindowManager::minimize(int id) {
     Window* w = find_window(id);
     if (!w || !(w->flags & WF_Minimizable)) return;
+    if (w->active && w->content) w->content->on_deactivate();
     w->minimized = true;
     w->visible = false;
     w->active = false;
@@ -151,6 +170,10 @@ void WindowManager::maximize(int id, int screen_w, int screen_h) {
     w->restore_rect = w->rect;
     w->rect = {0, TOPBAR_H, screen_w, screen_h - TOPBAR_H - DOCK_H};
     w->maximized = true;
+    if (w->content) {
+        SDL_Rect cr = w->content_rect();
+        w->content->on_resize(cr.w, cr.h);
+    }
 }
 
 void WindowManager::restore(int id) {
@@ -158,6 +181,10 @@ void WindowManager::restore(int id) {
     if (!w) return;
     w->rect = w->restore_rect;
     w->maximized = false;
+    if (w->content) {
+        SDL_Rect cr = w->content_rect();
+        w->content->on_resize(cr.w, cr.h);
+    }
 }
 
 void WindowManager::toggle_maximize(int id, int screen_w, int screen_h) {
@@ -397,6 +424,14 @@ void WindowManager::on_mouse_move(int mx, int my, int screen_w, int screen_h) {
 
 void WindowManager::on_mouse_up(int mx, int my) {
     if (drag_mode_ != DragMode::None) {
+        // If we were resizing, notify app of new size
+        if (drag_mode_ != DragMode::Move) {
+            Window* w = find_window(drag_win_id_);
+            if (w && w->content) {
+                SDL_Rect cr = w->content_rect();
+                w->content->on_resize(cr.w, cr.h);
+            }
+        }
         drag_mode_ = DragMode::None;
         drag_win_id_ = 0;
         return;

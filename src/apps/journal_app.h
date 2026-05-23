@@ -46,6 +46,10 @@ public:
     void on_text_input(const char* text) override;
     void on_scroll(int local_x, int local_y, int scroll_y) override;
 
+    // Lifecycle
+    bool on_close() override;
+    void on_resize(int w, int h) override;
+
 private:
     // ── Persistence ────────────────────────────────────────────
     void ensure_data_dir();

@@ -39,7 +39,11 @@ enum WindowFlags : uint32_t {
 class AppContent {
 public:
     virtual ~AppContent() = default;
+
+    // ── Rendering ───────────────────────────────────────────────
     virtual void render(const RenderCtx& ctx, SDL_Rect content_rect) = 0;
+
+    // ── Input events ────────────────────────────────────────────
     virtual void on_mouse_down(int local_x, int local_y) { (void)local_x; (void)local_y; }
     virtual void on_mouse_up(int local_x, int local_y) { (void)local_x; (void)local_y; }
     virtual void on_mouse_move(int local_x, int local_y) { (void)local_x; (void)local_y; }
@@ -47,6 +51,12 @@ public:
     virtual void on_key_up(SDL_Keycode key) { (void)key; }
     virtual void on_text_input(const char* text) { (void)text; }
     virtual void on_scroll(int local_x, int local_y, int scroll_y) { (void)local_x; (void)local_y; (void)scroll_y; }
+
+    // ── Lifecycle signals ───────────────────────────────────────
+    virtual void on_activate() {}                   // window gained focus
+    virtual void on_deactivate() {}                 // window lost focus
+    virtual bool on_close() { return true; }        // return false to cancel close
+    virtual void on_resize(int w, int h) { (void)w; (void)h; }  // content area resized
 };
 
 // ── Window structure ────────────────────────────────────────────

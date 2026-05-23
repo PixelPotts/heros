@@ -250,6 +250,23 @@ void JournalApp::go_back() {
     editing_index_ = -1;
 }
 
+// ── Lifecycle ───────────────────────────────────────────────────
+
+bool JournalApp::on_close() {
+    // Save any in-progress editing before allowing close
+    if (mode_ == ViewMode::Edit) {
+        save_current();
+    }
+    return true; // allow close
+}
+
+void JournalApp::on_resize(int w, int h) {
+    (void)w; (void)h;
+    // Invalidate word-wrap cache so it rebuilds at new width
+    last_wrap_width_ = 0;
+    cached_wraps_.clear();
+}
+
 // ── Text Editing ────────────────────────────────────────────────
 
 void JournalApp::rebuild_lines() {
