@@ -205,7 +205,7 @@ inline void register_system_commands(ShellEngine& shell) {
         for (int i = 0; i < dow; i++) line += "   ";
 
         for (int d = 1; d <= max_day; d++) {
-            char day[8];
+            char day[32];
             if (d == today) {
                 snprintf(day, sizeof(day), "\033[7m%2d\033[0m", d);
             } else {

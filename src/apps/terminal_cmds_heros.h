@@ -321,10 +321,6 @@ inline void register_heros_commands(ShellEngine& shell) {
             "\033[1;36m                            \033[0m",
         };
 
-        const char* info[] = {
-            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr
-        };
-
         std::string line0 = "\033[1;36m" + user + "\033[0m@\033[1;36m" + hostname + "\033[0m";
         std::string line1 = "-------------------";
         std::string line2 = "\033[1;33mOS\033[0m:      HerOS 1.0.0 x86_64";
