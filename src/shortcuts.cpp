@@ -16,13 +16,21 @@ void ShortcutManager::unbind(const std::string& action) {
     );
 }
 
+// Collapse left/right modifier variants into combined flags
+static uint16_t normalize_mod(uint16_t mod) {
+    uint16_t r = 0;
+    if (mod & KMOD_CTRL)  r |= KMOD_CTRL;
+    if (mod & KMOD_ALT)   r |= KMOD_ALT;
+    if (mod & KMOD_SHIFT) r |= KMOD_SHIFT;
+    if (mod & KMOD_GUI)   r |= KMOD_GUI;
+    return r;
+}
+
 bool ShortcutManager::handle_key(SDL_Keycode key, uint16_t mod) {
-    // Normalize modifier: only care about ctrl, alt, shift, gui
-    uint16_t mask = KMOD_CTRL | KMOD_ALT | KMOD_SHIFT | KMOD_GUI;
-    uint16_t pressed = mod & mask;
+    uint16_t pressed = normalize_mod(mod);
 
     for (auto& b : bindings_) {
-        if (b.key == key && (b.mod & mask) == pressed) {
+        if (b.key == key && normalize_mod(b.mod) == pressed) {
             if (b.callback) b.callback();
             return true;
         }
