@@ -1,11 +1,10 @@
 #include "app_registry.h"
-#include "apps/journal_app.h"
-#include "apps/finance_app.h"
-#include "apps/settings_app.h"
-#include "apps/taskmanager_app.h"
-#include "apps/filemanager_app.h"
 #include <cstdio>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
+#include <dlfcn.h>
 
 // ── AppContext implementation ───────────────────────────────────
 
@@ -49,7 +48,7 @@ bool AppRegistry::register_app(const AppManifest& manifest, AppFactory factory) 
         return false;
     }
 
-    apps_[manifest.app_id] = {manifest, std::move(factory)};
+    apps_[manifest.app_id] = {manifest, std::move(factory), nullptr};
     fprintf(stderr, "AppRegistry: registered '%s' (%s)\n",
             manifest.name.c_str(), manifest.app_id.c_str());
     return true;
@@ -236,105 +235,210 @@ void AppRegistry::on_window_closed(int window_id) {
     );
 }
 
-// ── Built-in app registration ───────────────────────────────────
+// ── Icon name → enum parser ──────────────────────────────────────
 
-void register_builtin_apps(AppRegistry& registry) {
-    // Journal
-    {
-        AppManifest m;
-        m.app_id = "com.heros.journal";
-        m.name = "Journal";
-        m.icon = Icon::Journal;
-        m.category = AppCategory::Productivity;
-        m.default_rect = {0, 0, 800, 550};
-        m.min_w = 400;
-        m.min_h = 300;
-        m.singleton = true;
-        m.start_maximized = false;
-        m.start_centered = true;
-        m.dock_pinned = true;
-        m.dock_order = 4;   // match current dock position
-        m.autostart = false;
-        registry.register_app(m, []() {
-            return std::make_unique<JournalApp>();
-        });
+Icon AppRegistry::parse_icon(const std::string& name) {
+    if (name == "bell")       return Icon::Bell;
+    if (name == "waveform")   return Icon::Waveform;
+    if (name == "grid")       return Icon::Grid;
+    if (name == "volume")     return Icon::Volume;
+    if (name == "power")      return Icon::Power;
+    if (name == "flower")     return Icon::Flower;
+    if (name == "book")       return Icon::Book;
+    if (name == "journal")    return Icon::Journal;
+    if (name == "briefcase")  return Icon::Briefcase;
+    if (name == "sliders")    return Icon::Sliders;
+    if (name == "compass")    return Icon::Compass;
+    if (name == "people")     return Icon::People;
+    if (name == "gear")       return Icon::Gear;
+    if (name == "star")       return Icon::Star;
+    if (name == "sparkle")    return Icon::Sparkle;
+    if (name == "moon")       return Icon::Moon;
+    if (name == "target")     return Icon::Target;
+    if (name == "lotus")      return Icon::Lotus;
+    if (name == "mountain")   return Icon::Mountain;
+    if (name == "trash")      return Icon::Trash;
+    if (name == "pen")        return Icon::Pen;
+    if (name == "image")      return Icon::Image;
+    if (name == "pin")        return Icon::Pin;
+    if (name == "check")      return Icon::Check;
+    if (name == "lock")       return Icon::Lock;
+    if (name == "dots")       return Icon::Dots;
+    if (name == "ring")       return Icon::Ring;
+    return Icon::Box;  // default fallback
+}
+
+// ── Category string → enum parser ───────────────────────────────
+
+AppCategory AppRegistry::parse_category(const std::string& name) {
+    if (name == "productivity")  return AppCategory::Productivity;
+    if (name == "system")        return AppCategory::System;
+    if (name == "utility")       return AppCategory::Utility;
+    if (name == "creative")      return AppCategory::Creative;
+    if (name == "communication") return AppCategory::Communication;
+    return AppCategory::Utility;  // default fallback
+}
+
+// ── Parse manifest.conf → AppManifest ───────────────────────────
+
+bool AppRegistry::parse_manifest(const std::string& path, AppManifest& out) const {
+    std::ifstream file(path);
+    if (!file.is_open()) return false;
+
+    std::string line;
+    while (std::getline(file, line)) {
+        // Skip empty lines and comments
+        if (line.empty() || line[0] == '#') continue;
+
+        auto eq = line.find('=');
+        if (eq == std::string::npos) continue;
+
+        std::string key = line.substr(0, eq);
+        std::string val = line.substr(eq + 1);
+
+        if (key == "app_id")           out.app_id = val;
+        else if (key == "name")        out.name = val;
+        else if (key == "icon")        out.icon = parse_icon(val);
+        else if (key == "category")    out.category = parse_category(val);
+        else if (key == "singleton")   out.singleton = (val == "true");
+        else if (key == "start_maximized") out.start_maximized = (val == "true");
+        else if (key == "start_centered")  out.start_centered = (val == "true");
+        else if (key == "dock_pinned")     out.dock_pinned = (val == "true");
+        else if (key == "autostart")       out.autostart = (val == "true");
+        else if (key == "dock_order")      out.dock_order = std::stoi(val);
+        else if (key == "default_w")       out.default_rect.w = std::stoi(val);
+        else if (key == "default_h")       out.default_rect.h = std::stoi(val);
+        else if (key == "min_w")           out.min_w = std::stoi(val);
+        else if (key == "min_h")           out.min_h = std::stoi(val);
+        else if (key == "max_w")           out.max_w = std::stoi(val);
+        else if (key == "max_h")           out.max_h = std::stoi(val);
+        else if (key == "version")         out.version = val;
+        // "library" key is handled by the caller
     }
 
-    // Finance
-    {
-        AppManifest m;
-        m.app_id = "com.heros.finance";
-        m.name = "Finance";
-        m.icon = Icon::Briefcase;
-        m.category = AppCategory::Productivity;
-        m.default_rect = {0, 0, 900, 600};
-        m.min_w = 500;
-        m.min_h = 400;
-        m.singleton = true;
-        m.start_maximized = true;
-        m.start_centered = true;
-        m.dock_pinned = true;
-        m.dock_order = 3;
-        m.autostart = true;  // opens by default on startup
-        registry.register_app(m, []() {
-            return std::make_unique<FinanceApp>();
-        });
+    return !out.app_id.empty() && !out.name.empty();
+}
+
+// ── Dynamic app loading ─────────────────────────────────────────
+
+void AppRegistry::load_dynamic_apps() {
+    namespace fs = std::filesystem;
+
+    const char* home = getenv("HOME");
+    if (!home) return;
+
+    std::string apps_dir = std::string(home) + "/.heros/apps";
+    if (!fs::is_directory(apps_dir)) {
+        fprintf(stderr, "AppLoader: no apps directory at %s\n", apps_dir.c_str());
+        return;
     }
 
-    // Settings
-    {
-        AppManifest m;
-        m.app_id = "com.heros.settings";
-        m.name = "Settings";
-        m.icon = Icon::Gear;
-        m.category = AppCategory::System;
-        m.default_rect = {0, 0, 750, 500};
-        m.min_w = 500;
-        m.min_h = 350;
-        m.singleton = true;
-        m.start_centered = true;
-        m.dock_pinned = true;
-        m.dock_order = 5;
-        registry.register_app(m, []() {
-            return std::make_unique<SettingsApp>();
-        });
-    }
+    for (auto& bundle : fs::directory_iterator(apps_dir)) {
+        if (!bundle.is_directory()) continue;
 
-    // Task Manager
-    {
-        AppManifest m;
-        m.app_id = "com.heros.taskmanager";
-        m.name = "Task Manager";
-        m.icon = Icon::Grid;
-        m.category = AppCategory::System;
-        m.default_rect = {0, 0, 700, 450};
-        m.min_w = 450;
-        m.min_h = 300;
-        m.singleton = true;
-        m.start_centered = true;
-        m.dock_pinned = true;
-        m.dock_order = 6;
-        registry.register_app(m, []() {
-            return std::make_unique<TaskManagerApp>();
-        });
-    }
+        std::string bundle_path = bundle.path().string();
+        std::string manifest_path = bundle_path + "/manifest.conf";
 
-    // File Manager
-    {
-        AppManifest m;
-        m.app_id = "com.heros.files";
-        m.name = "Files";
-        m.icon = Icon::Book;
-        m.category = AppCategory::System;
-        m.default_rect = {0, 0, 750, 500};
-        m.min_w = 400;
-        m.min_h = 300;
-        m.singleton = true;
-        m.start_centered = true;
-        m.dock_pinned = true;
-        m.dock_order = 7;
-        registry.register_app(m, []() {
-            return std::make_unique<FileManagerApp>();
-        });
+        if (!fs::exists(manifest_path)) {
+            fprintf(stderr, "AppLoader: skipping %s (no manifest.conf)\n",
+                    bundle.path().filename().c_str());
+            continue;
+        }
+
+        // Parse manifest
+        AppManifest manifest;
+        if (!parse_manifest(manifest_path, manifest)) {
+            fprintf(stderr, "AppLoader: failed to parse %s\n", manifest_path.c_str());
+            continue;
+        }
+
+        // Find library path from manifest
+        std::string lib_name;
+        {
+            std::ifstream mf(manifest_path);
+            std::string line;
+            while (std::getline(mf, line)) {
+                if (line.substr(0, 8) == "library=") {
+                    lib_name = line.substr(8);
+                    break;
+                }
+            }
+        }
+        if (lib_name.empty()) {
+            fprintf(stderr, "AppLoader: no library= in %s\n", manifest_path.c_str());
+            continue;
+        }
+
+        std::string so_path = bundle_path + "/" + lib_name;
+        if (!fs::exists(so_path)) {
+            fprintf(stderr, "AppLoader: library not found: %s\n", so_path.c_str());
+            continue;
+        }
+
+        // dlopen the shared library
+        void* handle = dlopen(so_path.c_str(), RTLD_NOW | RTLD_LOCAL);
+        if (!handle) {
+            fprintf(stderr, "AppLoader: dlopen failed for %s: %s\n",
+                    so_path.c_str(), dlerror());
+            continue;
+        }
+
+        // Resolve symbols
+        using InfoFn   = const HerosAppInfo* (*)();
+        using CreateFn = AppContent* (*)();
+
+        auto info_fn   = (InfoFn)dlsym(handle, "heros_app_info");
+        auto create_fn = (CreateFn)dlsym(handle, "heros_create_app");
+
+        if (!info_fn || !create_fn) {
+            fprintf(stderr, "AppLoader: missing exports in %s: %s\n",
+                    so_path.c_str(), dlerror());
+            dlclose(handle);
+            continue;
+        }
+
+        // ABI version check
+        const HerosAppInfo* info = info_fn();
+        if (!info || info->abi_version != HEROS_ABI_VERSION) {
+            fprintf(stderr, "AppLoader: ABI mismatch in %s (got %d, want %d)\n",
+                    so_path.c_str(), info ? info->abi_version : -1, HEROS_ABI_VERSION);
+            dlclose(handle);
+            continue;
+        }
+
+        // Skip if already registered (duplicate app_id)
+        if (apps_.count(manifest.app_id)) {
+            fprintf(stderr, "AppLoader: skipping duplicate app_id '%s'\n",
+                    manifest.app_id.c_str());
+            dlclose(handle);
+            continue;
+        }
+
+        // Wrap raw factory in unique_ptr-returning lambda
+        AppFactory factory = [create_fn]() -> std::unique_ptr<AppContent> {
+            AppContent* raw = create_fn();
+            return std::unique_ptr<AppContent>(raw);
+        };
+
+        apps_[manifest.app_id] = {manifest, std::move(factory), handle};
+        fprintf(stderr, "AppLoader: loaded dynamic app '%s' (%s) from %s\n",
+                manifest.name.c_str(), manifest.app_id.c_str(), so_path.c_str());
     }
+}
+
+void AppRegistry::unload_all_dynamic() {
+    for (auto& [id, entry] : apps_) {
+        if (entry.dl_handle) {
+            dlclose(entry.dl_handle);
+            fprintf(stderr, "AppLoader: unloaded '%s'\n", id.c_str());
+            entry.dl_handle = nullptr;
+        }
+    }
+}
+
+// ── Built-in app registration (stub — apps now load dynamically) ─
+
+void register_builtin_apps(AppRegistry& /*registry*/) {
+    // All apps are now loaded as dynamic .so plugins from ~/.heros/apps/
+    // This function is kept as a stub for future built-in system apps.
 }

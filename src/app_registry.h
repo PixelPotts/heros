@@ -1,5 +1,6 @@
 #pragma once
 #include "window.h"
+#include "heros_sdk.h"
 #include <string>
 #include <vector>
 #include <functional>
@@ -87,14 +88,26 @@ public:
     bool is_running(const std::string& app_id) const;
     int find_window_for_app(const std::string& app_id) const;
 
+    // Dynamic app loading — scan ~/.heros/apps/ for app bundles
+    void load_dynamic_apps();
+    void unload_all_dynamic();
+
     // Track running apps (called by WM or main loop)
     void on_window_opened(const std::string& app_id, int window_id);
     void on_window_closed(int window_id);
 
 private:
+    // Parse a manifest.conf file into an AppManifest
+    bool parse_manifest(const std::string& path, AppManifest& out) const;
+    // Convert icon name string to Icon enum
+    static Icon parse_icon(const std::string& name);
+    // Convert category string to AppCategory enum
+    static AppCategory parse_category(const std::string& name);
+
     struct AppEntry {
         AppManifest manifest;
         AppFactory factory;
+        void* dl_handle = nullptr;  // non-null for dynamically loaded apps
     };
 
     struct RunningInstance {
