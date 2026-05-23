@@ -12,6 +12,7 @@
 #include "systray.h"
 #include "launcher.h"
 #include "workspaces.h"
+#include "power.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -217,6 +218,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Theme manager
     ThemeManager theme_mgr;
 
+    // Power manager
+    PowerManager power;
+    power.init(&audio, &lockscreen);
+    power.set_on_lock([&]() { lockscreen.lock(); });
+
     // Workspace manager
     WorkspaceManager workspaces;
     workspaces.init(4);
@@ -311,6 +317,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 && (event.key.keysym.mod & KMOD_CTRL))
                 running = false;
 
+            // Track activity for idle/dim
+            if (event.type == SDL_MOUSEMOTION || event.type == SDL_KEYDOWN ||
+                event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_TEXTINPUT) {
+                power.on_activity();
+            }
+
             // Lock screen consumes all events when active
             if (lockscreen.is_locked()) {
                 lockscreen.handle_event(event);
@@ -384,11 +396,26 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 ctx_menu.on_mouse_move(event.motion.x, event.motion.y);
             }
 
+            // Power menu clicks
+            if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+                if (power.menu_open()) {
+                    int w2, h2;
+                    SDL_GetWindowSize(window, &w2, &h2);
+                    if (power.handle_click(event.button.x, event.button.y, w2, h2))
+                        continue;
+                }
+            }
+
             // System tray clicks
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
                 int w2, h2;
                 SDL_GetWindowSize(window, &w2, &h2);
                 if (systray.handle_click(event.button.x, event.button.y, w2, 36)) {
+                    // Delegate power icon to power manager
+                    if (systray.active_panel() == 0) {
+                        systray.clear_panel();
+                        power.toggle_menu();
+                    }
                     continue;
                 }
             }
@@ -448,6 +475,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
         // Network manager: periodic updates
         network.tick(SDL_GetTicks());
 
+        // Power manager: idle tracking, screen dim
+        power.tick(SDL_GetTicks());
+        if (power.should_quit()) running = false;
+
         // 1. Render scene to frost target
         SDL_SetRenderTarget(renderer, frost.scene_target());
         render_background(renderer, wallpaper, w, h);
@@ -479,6 +510,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         // Render toast notifications on top of everything
         notifications.render(renderer, &fonts, w);
 
+        // Power menu
+        power.render_menu(renderer, &frost, &fonts, w, h);
+
         // Workspace indicator (above dock)
         workspaces.render_indicator(renderer, &fonts, w / 2, h - 12);
 
@@ -487,6 +521,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
         // App launcher overlay
         launcher.render(renderer, &frost, &fonts, w, h);
+
+        // Screen dim from idle
+        power.render_dim(renderer, w, h);
 
         // Lock screen renders on top of ALL UI
         lockscreen.render(renderer, &frost, &fonts, w, h, wallpaper);

@@ -31,6 +31,10 @@ public:
     // Close all panels
     void close_all() { active_panel_ = -1; }
 
+    // Query which panel is active (for power menu delegation)
+    int active_panel() const { return active_panel_; }
+    void clear_panel() { active_panel_ = -1; }
+
 private:
     AudioManager* audio_ = nullptr;
     NetworkManager* network_ = nullptr;
