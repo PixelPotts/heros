@@ -1,0 +1,650 @@
+# HerOS Terminal — Command Reference (100 commands)
+# Single source of truth for man and manall commands.
+
+categories:
+  - name: "Shell & Environment"
+    commands:
+      - name: echo
+        synopsis: "echo [-n] [-e] [STRING...]"
+        description: "Print STRING(s) to standard output"
+        flags:
+          - flag: "-n"
+            desc: "No trailing newline"
+          - flag: "-e"
+            desc: "Interpret backslash escapes (\\n, \\t, etc.)"
+
+      - name: printf
+        synopsis: "printf FORMAT [ARG...]"
+        description: "Format and print data"
+        flags:
+          - flag: "%s"
+            desc: "String format specifier"
+          - flag: "%d"
+            desc: "Integer format specifier"
+
+      - name: env
+        synopsis: "env"
+        description: "Print all environment variables"
+        flags: []
+
+      - name: export
+        synopsis: "export NAME=VALUE"
+        description: "Set an environment variable"
+        flags: []
+
+      - name: unset
+        synopsis: "unset NAME"
+        description: "Remove an environment variable"
+        flags: []
+
+      - name: alias
+        synopsis: "alias NAME=VALUE"
+        description: "Create a command alias"
+        flags: []
+
+      - name: unalias
+        synopsis: "unalias NAME"
+        description: "Remove a command alias"
+        flags: []
+
+      - name: history
+        synopsis: "history"
+        description: "Show command history (use Up/Down arrows)"
+        flags: []
+
+      - name: which
+        synopsis: "which COMMAND"
+        description: "Show the path of a command"
+        flags: []
+
+      - name: type
+        synopsis: "type COMMAND"
+        description: "Describe how a command name is interpreted"
+        flags: []
+
+      - name: source
+        synopsis: "source FILE"
+        description: "Execute commands from a file in the current shell"
+        flags: []
+
+      - name: read
+        synopsis: "read [VAR]"
+        description: "Read a line from stdin into VAR (default: REPLY)"
+        flags: []
+
+      - name: test
+        synopsis: "test EXPR  or  [ EXPR ]"
+        description: "Evaluate conditional expression"
+        flags:
+          - flag: "-z"
+            desc: "String is empty"
+          - flag: "-n"
+            desc: "String is non-empty"
+          - flag: "-e"
+            desc: "File exists"
+          - flag: "-f"
+            desc: "Is a regular file"
+          - flag: "-d"
+            desc: "Is a directory"
+
+      - name: "true"
+        synopsis: "true"
+        description: "Return success (exit code 0)"
+        flags: []
+
+      - name: "false"
+        synopsis: "false"
+        description: "Return failure (exit code 1)"
+        flags: []
+
+      - name: exit
+        synopsis: "exit"
+        description: "Close the terminal"
+        flags: []
+
+      - name: clear
+        synopsis: "clear"
+        description: "Clear the terminal screen"
+        flags: []
+
+      - name: set
+        synopsis: "set"
+        description: "Display all shell variables"
+        flags: []
+
+      - name: "yes"
+        synopsis: "yes [STRING]"
+        description: "Output STRING (default: 'y') repeatedly (max 100 lines)"
+        flags: []
+
+      - name: seq
+        synopsis: "seq [FIRST [INC]] LAST"
+        description: "Print a sequence of numbers"
+        flags: []
+
+  - name: "File Operations"
+    commands:
+      - name: ls
+        synopsis: "ls [-l] [-a] [-R] [-h] [PATH]"
+        description: "List directory contents"
+        flags:
+          - flag: "-l"
+            desc: "Long format with details"
+          - flag: "-a"
+            desc: "Show hidden files"
+          - flag: "-R"
+            desc: "List recursively"
+          - flag: "-h"
+            desc: "Human-readable sizes"
+
+      - name: cd
+        synopsis: "cd [DIR]"
+        description: "Change working directory. Supports ~, -, and .."
+        flags: []
+
+      - name: pwd
+        synopsis: "pwd"
+        description: "Print the current working directory"
+        flags: []
+
+      - name: cat
+        synopsis: "cat [-n] [FILE...]"
+        description: "Concatenate and print files"
+        flags:
+          - flag: "-n"
+            desc: "Number all output lines"
+
+      - name: cp
+        synopsis: "cp [-r] SRC DST"
+        description: "Copy files"
+        flags:
+          - flag: "-r"
+            desc: "Recursive for directories"
+
+      - name: mv
+        synopsis: "mv SRC DST"
+        description: "Move or rename files"
+        flags: []
+
+      - name: rm
+        synopsis: "rm [-r] [-f] FILE..."
+        description: "Remove files"
+        flags:
+          - flag: "-r"
+            desc: "Recursive removal"
+          - flag: "-f"
+            desc: "Force removal without confirmation"
+
+      - name: mkdir
+        synopsis: "mkdir [-p] DIR..."
+        description: "Create directories"
+        flags:
+          - flag: "-p"
+            desc: "Create parent directories as needed"
+
+      - name: rmdir
+        synopsis: "rmdir DIR"
+        description: "Remove empty directories"
+        flags: []
+
+      - name: touch
+        synopsis: "touch FILE..."
+        description: "Create empty files or update timestamps"
+        flags: []
+
+      - name: find
+        synopsis: "find [PATH] [-name PAT] [-type f|d]"
+        description: "Search for files. Supports * glob in -name"
+        flags:
+          - flag: "-name"
+            desc: "Match filename pattern"
+          - flag: "-type"
+            desc: "f for files, d for directories"
+
+      - name: ln
+        synopsis: "ln"
+        description: "Create links (not supported in VFS)"
+        flags: []
+
+      - name: chmod
+        synopsis: "chmod MODE FILE"
+        description: "Change permissions (simulated)"
+        flags: []
+
+      - name: chown
+        synopsis: "chown OWNER FILE"
+        description: "Change ownership (simulated)"
+        flags: []
+
+      - name: stat
+        synopsis: "stat FILE"
+        description: "Display file metadata"
+        flags: []
+
+      - name: file
+        synopsis: "file FILE"
+        description: "Determine file type"
+        flags: []
+
+      - name: tree
+        synopsis: "tree [DIR]"
+        description: "Display directory tree structure"
+        flags: []
+
+      - name: du
+        synopsis: "du [-h] [PATH]"
+        description: "Estimate file space usage"
+        flags:
+          - flag: "-h"
+            desc: "Human-readable sizes"
+
+      - name: df
+        synopsis: "df [-h]"
+        description: "Report filesystem disk space"
+        flags:
+          - flag: "-h"
+            desc: "Human-readable sizes"
+
+      - name: realpath
+        synopsis: "realpath PATH"
+        description: "Resolve a path to its absolute form"
+        flags: []
+
+  - name: "Text Processing"
+    commands:
+      - name: grep
+        synopsis: "grep [-i] [-n] [-v] [-c] [-r] PATTERN [FILE...]"
+        description: "Search for PATTERN in files"
+        flags:
+          - flag: "-i"
+            desc: "Ignore case"
+          - flag: "-n"
+            desc: "Show line numbers"
+          - flag: "-v"
+            desc: "Invert match"
+          - flag: "-c"
+            desc: "Count matches only"
+          - flag: "-r"
+            desc: "Recursive search"
+
+      - name: sed
+        synopsis: "sed 's/PAT/REPL/[g]' [FILE]"
+        description: "Stream editor. Supports s/pattern/replacement/ substitution"
+        flags: []
+
+      - name: awk
+        synopsis: "awk '{print $N}' [FILE]"
+        description: "Simplified field processor"
+        flags:
+          - flag: "-F"
+            desc: "Set field delimiter"
+
+      - name: sort
+        synopsis: "sort [-r] [-n] [-u] [FILE]"
+        description: "Sort lines of text"
+        flags:
+          - flag: "-r"
+            desc: "Reverse sort order"
+          - flag: "-n"
+            desc: "Numeric sort"
+          - flag: "-u"
+            desc: "Unique lines only"
+
+      - name: uniq
+        synopsis: "uniq [-c] [-d] [FILE]"
+        description: "Remove duplicate adjacent lines"
+        flags:
+          - flag: "-c"
+            desc: "Prefix lines with count"
+          - flag: "-d"
+            desc: "Only show duplicates"
+
+      - name: wc
+        synopsis: "wc [-l] [-w] [-c] [FILE...]"
+        description: "Count lines, words, bytes"
+        flags:
+          - flag: "-l"
+            desc: "Count lines"
+          - flag: "-w"
+            desc: "Count words"
+          - flag: "-c"
+            desc: "Count bytes"
+
+      - name: head
+        synopsis: "head [-n N] [FILE]"
+        description: "Output first N lines (default: 10)"
+        flags:
+          - flag: "-n"
+            desc: "Number of lines to show"
+
+      - name: tail
+        synopsis: "tail [-n N] [FILE]"
+        description: "Output last N lines (default: 10)"
+        flags:
+          - flag: "-n"
+            desc: "Number of lines to show"
+
+      - name: cut
+        synopsis: "cut -d DELIM -f FIELDS [FILE]"
+        description: "Select fields from each line"
+        flags:
+          - flag: "-d"
+            desc: "Set field delimiter"
+          - flag: "-f"
+            desc: "Select fields by number"
+
+      - name: tr
+        synopsis: "tr [-d] SET1 [SET2]"
+        description: "Translate or delete characters"
+        flags:
+          - flag: "-d"
+            desc: "Delete characters in SET1"
+
+      - name: diff
+        synopsis: "diff FILE1 FILE2"
+        description: "Compare files line by line (unified format)"
+        flags: []
+
+      - name: tee
+        synopsis: "tee [-a] FILE..."
+        description: "Copy stdin to stdout and files"
+        flags:
+          - flag: "-a"
+            desc: "Append to files instead of overwriting"
+
+      - name: paste
+        synopsis: "paste [-d DELIM] FILE..."
+        description: "Merge lines of files side by side"
+        flags:
+          - flag: "-d"
+            desc: "Set delimiter (default: tab)"
+
+      - name: rev
+        synopsis: "rev [FILE]"
+        description: "Reverse each line of input"
+        flags: []
+
+      - name: fold
+        synopsis: "fold [-w WIDTH] [FILE]"
+        description: "Wrap lines to specified width (default: 80)"
+        flags:
+          - flag: "-w"
+            desc: "Set line width"
+
+      - name: column
+        synopsis: "column [-t] [FILE]"
+        description: "Format input into columns"
+        flags:
+          - flag: "-t"
+            desc: "Table mode — auto-align columns"
+
+      - name: nl
+        synopsis: "nl [FILE]"
+        description: "Number non-empty lines"
+        flags: []
+
+      - name: strings
+        synopsis: "strings FILE"
+        description: "Print printable character sequences (4+ chars)"
+        flags: []
+
+      - name: base64
+        synopsis: "base64 [-d] [FILE]"
+        description: "Base64 encode or decode"
+        flags:
+          - flag: "-d"
+            desc: "Decode instead of encode"
+
+      - name: xargs
+        synopsis: "xargs COMMAND [ARGS]"
+        description: "Build and execute commands from stdin"
+        flags: []
+
+  - name: "System"
+    commands:
+      - name: ps
+        synopsis: "ps"
+        description: "List running processes"
+        flags: []
+
+      - name: kill
+        synopsis: "kill [-9] PID"
+        description: "Terminate a process"
+        flags:
+          - flag: "-9"
+            desc: "Force kill (SIGKILL)"
+
+      - name: top
+        synopsis: "top"
+        description: "Display process snapshot with system info"
+        flags: []
+
+      - name: uptime
+        synopsis: "uptime"
+        description: "Show system uptime and process count"
+        flags: []
+
+      - name: whoami
+        synopsis: "whoami"
+        description: "Print the current username"
+        flags: []
+
+      - name: hostname
+        synopsis: "hostname"
+        description: "Print the system hostname"
+        flags: []
+
+      - name: uname
+        synopsis: "uname [-a] [-s] [-r] [-m]"
+        description: "Print system information"
+        flags:
+          - flag: "-a"
+            desc: "All information"
+          - flag: "-s"
+            desc: "Kernel name"
+          - flag: "-r"
+            desc: "Kernel release"
+          - flag: "-m"
+            desc: "Machine architecture"
+
+      - name: date
+        synopsis: "date [+FORMAT]"
+        description: "Display current date/time. Supports strftime format"
+        flags: []
+
+      - name: cal
+        synopsis: "cal [MONTH YEAR]"
+        description: "Display a calendar"
+        flags: []
+
+      - name: time
+        synopsis: "time COMMAND"
+        description: "Time a command's execution"
+        flags: []
+
+      - name: sleep
+        synopsis: "sleep SECONDS"
+        description: "Pause for SECONDS (max 10s)"
+        flags: []
+
+      - name: id
+        synopsis: "id"
+        description: "Print user and group IDs"
+        flags: []
+
+      - name: w
+        synopsis: "w"
+        description: "Show who is logged in"
+        flags: []
+
+      - name: free
+        synopsis: "free [-h]"
+        description: "Display memory usage (simulated)"
+        flags:
+          - flag: "-h"
+            desc: "Human-readable sizes"
+
+      - name: lsof
+        synopsis: "lsof"
+        description: "List open files by process"
+        flags: []
+
+  - name: "Networking"
+    commands:
+      - name: curl
+        synopsis: "curl [-o FILE] [-s] [-X METHOD] [-H HEADER] [-d DATA] URL"
+        description: "HTTP client (libcurl). Supports GET, POST, PUT, DELETE"
+        flags:
+          - flag: "-o"
+            desc: "Write output to file"
+          - flag: "-s"
+            desc: "Silent mode"
+          - flag: "-X"
+            desc: "HTTP method"
+          - flag: "-H"
+            desc: "Add request header"
+          - flag: "-d"
+            desc: "POST data"
+
+      - name: wget
+        synopsis: "wget [-O FILE] [-q] URL"
+        description: "Download files"
+        flags:
+          - flag: "-O"
+            desc: "Output filename"
+          - flag: "-q"
+            desc: "Quiet mode"
+
+      - name: ping
+        synopsis: "ping [-c COUNT] HOST"
+        description: "Simulated ping with real DNS resolution"
+        flags:
+          - flag: "-c"
+            desc: "Number of packets to send"
+
+      - name: dig
+        synopsis: "dig HOSTNAME"
+        description: "DNS lookup (real resolution via getaddrinfo)"
+        flags: []
+
+      - name: ifconfig
+        synopsis: "ifconfig"
+        description: "Display network interfaces (simulated)"
+        flags: []
+
+      - name: netstat
+        synopsis: "netstat"
+        description: "Display network connections (simulated)"
+        flags: []
+
+      - name: nc
+        synopsis: "nc"
+        description: "Netcat (stub -- use curl/wget instead)"
+        flags: []
+
+      - name: host
+        synopsis: "host HOSTNAME"
+        description: "DNS lookup (real resolution via getaddrinfo)"
+        flags: []
+
+      - name: traceroute
+        synopsis: "traceroute HOST"
+        description: "Simulated traceroute with real DNS resolution"
+        flags: []
+
+      - name: nslookup
+        synopsis: "nslookup HOSTNAME"
+        description: "DNS lookup (real resolution via getaddrinfo)"
+        flags: []
+
+  - name: "Archive & Checksum"
+    commands:
+      - name: tar
+        synopsis: "tar [cxt] -f FILE [FILES...]"
+        description: "Create/extract/list archives. Custom VFS format"
+        flags:
+          - flag: "c"
+            desc: "Create archive"
+          - flag: "x"
+            desc: "Extract archive"
+          - flag: "t"
+            desc: "List archive contents"
+          - flag: "-f"
+            desc: "Archive filename"
+
+      - name: gzip
+        synopsis: "gzip FILE"
+        description: "Compress file using zlib"
+        flags: []
+
+      - name: gunzip
+        synopsis: "gunzip FILE.gz"
+        description: "Decompress gzip file"
+        flags: []
+
+      - name: zip
+        synopsis: "zip ARCHIVE FILE..."
+        description: "Create zip archive (libarchive)"
+        flags: []
+
+      - name: unzip
+        synopsis: "unzip ARCHIVE.zip"
+        description: "Extract zip archive (libarchive)"
+        flags: []
+
+      - name: md5sum
+        synopsis: "md5sum [FILE...]"
+        description: "Compute MD5 hash (OpenSSL)"
+        flags: []
+
+      - name: sha256sum
+        synopsis: "sha256sum [FILE...]"
+        description: "Compute SHA-256 hash (OpenSSL)"
+        flags: []
+
+  - name: "HerOS"
+    commands:
+      - name: launch
+        synopsis: "launch APP_ID"
+        description: "Launch a HerOS app. Short names auto-prefixed with com.heros."
+        flags: []
+
+      - name: apps
+        synopsis: "apps"
+        description: "List all installed HerOS apps and their status"
+        flags: []
+
+      - name: notify
+        synopsis: "notify TITLE [BODY]"
+        description: "Send a toast notification"
+        flags: []
+
+      - name: theme
+        synopsis: "theme [list|set NAME]"
+        description: "List or set the desktop theme"
+        flags: []
+
+      - name: wallpaper
+        synopsis: "wallpaper"
+        description: "Display wallpaper info"
+        flags: []
+
+      - name: help
+        synopsis: "help"
+        description: "Display categorized list of all 100 commands"
+        flags: []
+
+      - name: man
+        synopsis: "man COMMAND"
+        description: "Display manual page for a command"
+        flags: []
+
+      - name: manall
+        synopsis: "manall [COMMAND]"
+        description: "Display full command reference. Optionally filter by command name"
+        flags: []
+
+      - name: neofetch
+        synopsis: "neofetch"
+        description: "Display system info with ASCII art"
+        flags: []

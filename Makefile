@@ -36,7 +36,7 @@ $(BUILD_DIR):
 apps: $(APP_SOS)
 
 # ── Terminal app needs extra libraries (curl, ssl, zlib, archive) ─
-TERMINAL_LIBS := -lcurl -lssl -lcrypto -lz -larchive
+TERMINAL_LIBS := -lcurl -lssl -lcrypto -lz -larchive -lyaml-cpp
 
 $(BUILD_DIR)/apps/terminal_app.so: $(SRC_DIR)/apps/terminal_app.cpp | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
@@ -72,6 +72,7 @@ install-apps: apps
 	@# Terminal
 	@mkdir -p $(APPS_DIR)/com.heros.terminal
 	@cp $(BUILD_DIR)/apps/terminal_app.so $(APPS_DIR)/com.heros.terminal/terminal.so
+	@cp $(SRC_DIR)/apps/commands.yaml $(APPS_DIR)/com.heros.terminal/commands.yaml
 	@printf 'app_id=com.heros.terminal\nname=Terminal\nicon=grid\ncategory=system\nlibrary=terminal.so\nsingleton=false\nstart_centered=true\ndock_pinned=true\ndock_order=2\ndefault_w=820\ndefault_h=520\nmin_w=400\nmin_h=300\n' > $(APPS_DIR)/com.heros.terminal/manifest.conf
 	@echo "Installed 6 app bundles to $(APPS_DIR)"
 

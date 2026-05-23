@@ -26,7 +26,7 @@ fi
 CXX="g++"
 CXXFLAGS="-std=c++17 -Wall -Wextra -fPIC $(pkg-config --cflags sdl2 SDL2_ttf SDL2_image)"
 LDFLAGS="$(pkg-config --libs sdl2 SDL2_ttf SDL2_image) -ldl"
-TERMINAL_LIBS="-lcurl -lssl -lcrypto -lz -larchive"
+TERMINAL_LIBS="-lcurl -lssl -lcrypto -lz -larchive -lyaml-cpp"
 
 # Core object files (everything except main.o which has main())
 CORE_OBJS=$(ls "$BUILD_DIR"/*.o | grep -v main.o | tr '\n' ' ')
@@ -37,6 +37,10 @@ $CXX $CXXFLAGS \
     $CORE_OBJS \
     -o "$TEST_BIN" \
     $LDFLAGS $TERMINAL_LIBS
+
+# Copy commands.yaml so man/manall can find it
+YAML_SRC="$PROJECT_DIR/src/apps/commands.yaml"
+export HEROS_COMMANDS_YAML="$YAML_SRC"
 
 echo "Running tests..."
 echo ""

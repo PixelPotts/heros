@@ -625,13 +625,21 @@ int main() {
 
     // 100. help
     RUN("help");
-    record("help", contains(output, "100") && contains(output, "Shell"), "");
+    record("help", contains(output, "101") && contains(output, "Shell"), "");
 
-    // 101. man
+    // 101. man (YAML-based)
     RUN("man echo");
     record("man", contains(output, "SYNOPSIS") && contains(output, "echo"), "");
 
-    // 102. neofetch
+    // 102. manall (full reference)
+    RUN("manall");
+    record("manall", contains(output, "Shell & Environment") && contains(output, "echo") && contains(output, "grep"), "full");
+
+    // 103. manall filter
+    RUN("manall grep");
+    record("manall filter", contains(output, "grep") && contains(output, "PATTERN") && !contains(output, "echo"), "filtered");
+
+    // 104. neofetch
     RUN("neofetch");
     record("neofetch", contains(output, "HerOS") && contains(output, "hero") && contains(output, "Shell"), "");
 

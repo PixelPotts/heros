@@ -6,8 +6,24 @@
 #include <ctime>
 #include <sstream>
 #include <algorithm>
+#include <fstream>
+#include <yaml-cpp/yaml.h>
 
-// ── 8 HerOS-Specific Commands ───────────────────────────────────
+// ── Helper: locate and parse commands.yaml ──────────────────────
+
+static inline std::string find_commands_yaml() {
+    // 1. Env override (for tests)
+    const char* env = std::getenv("HEROS_COMMANDS_YAML");
+    if (env && std::ifstream(env).good()) return env;
+    // 2. App bundle
+    std::string home = std::getenv("HOME") ? std::getenv("HOME") : "/home";
+    std::string bundle = home + "/.heros/apps/com.heros.terminal/commands.yaml";
+    if (std::ifstream(bundle).good()) return bundle;
+    // 3. Source tree (dev fallback)
+    return "";
+}
+
+// ── 9 HerOS-Specific Commands (incl. manall) ────────────────────
 
 inline void register_heros_commands(ShellEngine& shell) {
 
@@ -121,7 +137,7 @@ inline void register_heros_commands(ShellEngine& shell) {
     shell.register_cmd("help", [&shell](std::vector<std::string>& args, CmdContext& ctx) -> int {
         (void)args;
 
-        ctx.outln("\033[1;36mHerOS Terminal — 100 Built-in Commands\033[0m");
+        ctx.outln("\033[1;36mHerOS Terminal — 101 Built-in Commands\033[0m");
         ctx.outln("");
 
         ctx.outln("\033[1;33mShell & Environment (20):\033[0m");
@@ -152,8 +168,8 @@ inline void register_heros_commands(ShellEngine& shell) {
         ctx.outln("  tar gzip gunzip zip unzip md5sum sha256sum");
         ctx.outln("");
 
-        ctx.outln("\033[1;33mHerOS (8):\033[0m");
-        ctx.outln("  launch apps notify theme wallpaper help man neofetch");
+        ctx.outln("\033[1;33mHerOS (9):\033[0m");
+        ctx.outln("  launch apps notify theme wallpaper help man manall neofetch");
         ctx.outln("");
 
         ctx.outln("Type '\033[1mman COMMAND\033[0m' for details on any command.");
@@ -163,130 +179,119 @@ inline void register_heros_commands(ShellEngine& shell) {
         return 0;
     });
 
-    // 7. man — manual page for a command
+    // 7. man — manual page for a command (reads from commands.yaml)
     shell.register_cmd("man", [](std::vector<std::string>& args, CmdContext& ctx) -> int {
         if (args.size() < 2) { ctx.outln("man: what manual page do you want?"); return 1; }
 
-        struct ManPage { const char* name; const char* synopsis; const char* desc; };
-        static const ManPage pages[] = {
-            {"echo", "echo [-n] [-e] [STRING...]", "Print STRING(s) to standard output. -n: no newline, -e: interpret escapes."},
-            {"printf", "printf FORMAT [ARG...]", "Format and print data. Supports %s, %d, \\n, \\t."},
-            {"env", "env", "Print all environment variables."},
-            {"export", "export NAME=VALUE", "Set an environment variable."},
-            {"unset", "unset NAME", "Remove an environment variable."},
-            {"alias", "alias NAME=VALUE", "Create a command alias."},
-            {"unalias", "unalias NAME", "Remove a command alias."},
-            {"history", "history", "Show command history (use Up/Down arrows)."},
-            {"which", "which COMMAND", "Show the path of a command."},
-            {"type", "type COMMAND", "Describe how a command name is interpreted."},
-            {"source", "source FILE", "Execute commands from a file in the current shell."},
-            {"read", "read [VAR]", "Read a line from stdin into VAR (default: REPLY)."},
-            {"test", "test EXPR  or  [ EXPR ]", "Evaluate conditional expression. Supports -z, -n, -e, -f, -d, =, !=, -eq, -lt, etc."},
-            {"true", "true", "Return success (exit code 0)."},
-            {"false", "false", "Return failure (exit code 1)."},
-            {"exit", "exit", "Close the terminal."},
-            {"clear", "clear", "Clear the terminal screen."},
-            {"set", "set", "Display all shell variables."},
-            {"yes", "yes [STRING]", "Output STRING (default: 'y') repeatedly (max 100 lines)."},
-            {"seq", "seq [FIRST [INC]] LAST", "Print a sequence of numbers."},
-            {"ls", "ls [-l] [-a] [-R] [-h] [PATH]", "List directory contents. -l: long format, -a: show hidden, -R: recursive, -h: human sizes."},
-            {"cd", "cd [DIR]", "Change working directory. Supports ~, -, and .."},
-            {"pwd", "pwd", "Print the current working directory."},
-            {"cat", "cat [-n] [FILE...]", "Concatenate and print files. -n: number lines."},
-            {"cp", "cp [-r] SRC DST", "Copy files. -r: recursive for directories."},
-            {"mv", "mv SRC DST", "Move or rename files."},
-            {"rm", "rm [-r] [-f] FILE...", "Remove files. -r: recursive, -f: force."},
-            {"mkdir", "mkdir [-p] DIR...", "Create directories. -p: create parents."},
-            {"rmdir", "rmdir DIR", "Remove empty directories."},
-            {"touch", "touch FILE...", "Create empty files or update timestamps."},
-            {"find", "find [PATH] [-name PAT] [-type f|d]", "Search for files. Supports * glob in -name."},
-            {"stat", "stat FILE", "Display file metadata."},
-            {"file", "file FILE", "Determine file type."},
-            {"tree", "tree [DIR]", "Display directory tree structure."},
-            {"du", "du [-h] [PATH]", "Estimate file space usage. -h: human-readable."},
-            {"df", "df [-h]", "Report filesystem disk space. -h: human-readable."},
-            {"realpath", "realpath PATH", "Resolve a path to its absolute form."},
-            {"grep", "grep [-i] [-n] [-v] [-c] [-r] PATTERN [FILE...]", "Search for PATTERN in files. -i: ignore case, -n: line numbers, -v: invert, -c: count, -r: recursive."},
-            {"sed", "sed 's/PAT/REPL/[g]' [FILE]", "Stream editor. Supports s/pattern/replacement/ substitution."},
-            {"awk", "awk '{print $N}' [FILE]", "Simplified field processor. Supports -F delimiter and $N field references."},
-            {"sort", "sort [-r] [-n] [-u] [FILE]", "Sort lines. -r: reverse, -n: numeric, -u: unique."},
-            {"uniq", "uniq [-c] [-d] [FILE]", "Remove duplicate adjacent lines. -c: count, -d: duplicates only."},
-            {"wc", "wc [-l] [-w] [-c] [FILE...]", "Count lines, words, bytes."},
-            {"head", "head [-n N] [FILE]", "Output first N lines (default: 10)."},
-            {"tail", "tail [-n N] [FILE]", "Output last N lines (default: 10)."},
-            {"cut", "cut -d DELIM -f FIELDS [FILE]", "Select fields from each line."},
-            {"tr", "tr [-d] SET1 [SET2]", "Translate or delete characters. -d: delete."},
-            {"diff", "diff FILE1 FILE2", "Compare files line by line (unified format)."},
-            {"tee", "tee [-a] FILE...", "Copy stdin to stdout and files. -a: append."},
-            {"rev", "rev [FILE]", "Reverse each line of input."},
-            {"fold", "fold [-w WIDTH] [FILE]", "Wrap lines to specified width (default: 80)."},
-            {"column", "column [-t] [FILE]", "Format input into columns. -t: table mode."},
-            {"nl", "nl [FILE]", "Number non-empty lines."},
-            {"strings", "strings FILE", "Print printable character sequences (4+ chars)."},
-            {"base64", "base64 [-d] [FILE]", "Base64 encode or decode. -d: decode."},
-            {"xargs", "xargs COMMAND [ARGS]", "Build and execute commands from stdin."},
-            {"ps", "ps", "List running processes."},
-            {"kill", "kill [-9] PID", "Terminate a process. -9: force kill."},
-            {"top", "top", "Display process snapshot with system info."},
-            {"uptime", "uptime", "Show system uptime and process count."},
-            {"whoami", "whoami", "Print the current username."},
-            {"hostname", "hostname", "Print the system hostname."},
-            {"uname", "uname [-a] [-s] [-r] [-m]", "Print system information. -a: all, -s: name, -r: release, -m: machine."},
-            {"date", "date [+FORMAT]", "Display current date/time. Supports strftime format."},
-            {"cal", "cal [MONTH YEAR]", "Display a calendar."},
-            {"time", "time COMMAND", "Time a command's execution."},
-            {"sleep", "sleep SECONDS", "Pause for SECONDS (max 10s)."},
-            {"id", "id", "Print user and group IDs."},
-            {"w", "w", "Show who is logged in."},
-            {"free", "free [-h]", "Display memory usage (simulated). -h: human-readable."},
-            {"lsof", "lsof", "List open files by process."},
-            {"curl", "curl [-o FILE] [-s] [-X METHOD] [-H HEADER] [-d DATA] URL", "HTTP client (libcurl). Supports GET, POST, PUT, DELETE."},
-            {"wget", "wget [-O FILE] [-q] URL", "Download files. -O: output filename, -q: quiet."},
-            {"ping", "ping [-c COUNT] HOST", "Simulated ping with real DNS resolution."},
-            {"dig", "dig HOSTNAME", "DNS lookup (real resolution via getaddrinfo)."},
-            {"ifconfig", "ifconfig", "Display network interfaces (simulated)."},
-            {"netstat", "netstat", "Display network connections (simulated)."},
-            {"nc", "nc", "Netcat (stub — use curl/wget instead)."},
-            {"host", "host HOSTNAME", "DNS lookup (real resolution via getaddrinfo)."},
-            {"traceroute", "traceroute HOST", "Simulated traceroute with real DNS resolution."},
-            {"nslookup", "nslookup HOSTNAME", "DNS lookup (real resolution via getaddrinfo)."},
-            {"tar", "tar [cxt] -f FILE [FILES...]", "Create/extract/list archives. Custom VFS format."},
-            {"gzip", "gzip FILE", "Compress file using zlib."},
-            {"gunzip", "gunzip FILE.gz", "Decompress gzip file."},
-            {"zip", "zip ARCHIVE FILE...", "Create zip archive (libarchive)."},
-            {"unzip", "unzip ARCHIVE.zip", "Extract zip archive (libarchive)."},
-            {"md5sum", "md5sum [FILE...]", "Compute MD5 hash (OpenSSL)."},
-            {"sha256sum", "sha256sum [FILE...]", "Compute SHA-256 hash (OpenSSL)."},
-            {"launch", "launch APP_ID", "Launch a HerOS app. Short names auto-prefixed with com.heros."},
-            {"apps", "apps", "List all installed HerOS apps and their status."},
-            {"notify", "notify TITLE [BODY]", "Send a toast notification."},
-            {"theme", "theme [list|set NAME]", "List or set the desktop theme."},
-            {"wallpaper", "wallpaper", "Display wallpaper info."},
-            {"help", "help", "Display categorized list of all 100 commands."},
-            {"man", "man COMMAND", "Display manual page for a command."},
-            {"neofetch", "neofetch", "Display system info with ASCII art."},
-            {"ln", "ln", "Create links (not supported in VFS)."},
-            {"chmod", "chmod MODE FILE", "Change permissions (simulated)."},
-            {"chown", "chown OWNER FILE", "Change ownership (simulated)."},
-            {"paste", "paste [-d DELIM] FILE...", "Merge lines of files side by side."},
-        };
+        std::string yaml_path = find_commands_yaml();
+        if (yaml_path.empty()) {
+            ctx.outln("man: commands.yaml not found");
+            return 1;
+        }
 
-        std::string cmd = args[1];
-        for (const auto& p : pages) {
-            if (cmd == p.name) {
-                ctx.outln("\033[1m" + std::string(p.name) + "\033[0m(1) — HerOS Manual");
-                ctx.outln("");
-                ctx.outln("\033[1mSYNOPSIS\033[0m");
-                ctx.outln("  " + std::string(p.synopsis));
-                ctx.outln("");
-                ctx.outln("\033[1mDESCRIPTION\033[0m");
-                ctx.outln("  " + std::string(p.desc));
-                return 0;
+        YAML::Node root;
+        try { root = YAML::LoadFile(yaml_path); }
+        catch (const std::exception& e) {
+            ctx.outln(std::string("man: failed to parse commands.yaml: ") + e.what());
+            return 1;
+        }
+
+        std::string target = args[1];
+        for (const auto& cat : root["categories"]) {
+            for (const auto& cmd : cat["commands"]) {
+                if (cmd["name"].as<std::string>() == target) {
+                    std::string name = cmd["name"].as<std::string>();
+                    std::string synopsis = cmd["synopsis"].as<std::string>();
+                    std::string desc = cmd["description"].as<std::string>();
+
+                    ctx.outln("\033[1m" + name + "\033[0m(1) \u2014 HerOS Manual");
+                    ctx.outln("");
+                    ctx.outln("\033[1mSYNOPSIS\033[0m");
+                    ctx.outln("  " + synopsis);
+                    ctx.outln("");
+                    ctx.outln("\033[1mDESCRIPTION\033[0m");
+                    ctx.outln("  " + desc);
+
+                    if (cmd["flags"] && cmd["flags"].size() > 0) {
+                        ctx.outln("");
+                        ctx.outln("\033[1mFLAGS\033[0m");
+                        for (const auto& f : cmd["flags"]) {
+                            ctx.outln("  \033[1;36m" + f["flag"].as<std::string>() +
+                                      "\033[0m  " + f["desc"].as<std::string>());
+                        }
+                    }
+                    return 0;
+                }
             }
         }
 
-        ctx.outln("No manual entry for " + cmd);
+        ctx.outln("No manual entry for " + target);
         return 1;
+    });
+
+    // 8. manall — full command reference from commands.yaml
+    shell.register_cmd("manall", [](std::vector<std::string>& args, CmdContext& ctx) -> int {
+        std::string yaml_path = find_commands_yaml();
+        if (yaml_path.empty()) {
+            ctx.outln("manall: commands.yaml not found");
+            return 1;
+        }
+
+        YAML::Node root;
+        try { root = YAML::LoadFile(yaml_path); }
+        catch (const std::exception& e) {
+            ctx.outln(std::string("manall: failed to parse commands.yaml: ") + e.what());
+            return 1;
+        }
+
+        // Optional filter: manall grep
+        std::string filter;
+        if (args.size() >= 2) filter = args[1];
+
+        bool found_any = false;
+        for (const auto& cat : root["categories"]) {
+            std::string cat_name = cat["name"].as<std::string>();
+            bool cat_header_printed = false;
+
+            for (const auto& cmd : cat["commands"]) {
+                std::string name = cmd["name"].as<std::string>();
+                if (!filter.empty() && name != filter) continue;
+
+                // Print category header on first match
+                if (!cat_header_printed) {
+                    if (found_any) ctx.outln("");
+                    ctx.outln("\033[1;33m\u2550\u2550 " + cat_name + " \u2550\u2550\033[0m");
+                    cat_header_printed = true;
+                }
+                found_any = true;
+
+                std::string synopsis = cmd["synopsis"].as<std::string>();
+                std::string desc = cmd["description"].as<std::string>();
+
+                ctx.outln("");
+                ctx.outln("  \033[1;36m" + name + "\033[0m  " + synopsis);
+                ctx.outln("    " + desc);
+
+                if (cmd["flags"] && cmd["flags"].size() > 0) {
+                    for (const auto& f : cmd["flags"]) {
+                        ctx.outln("      \033[1m" + f["flag"].as<std::string>() +
+                                  "\033[0m  " + f["desc"].as<std::string>());
+                    }
+                }
+            }
+        }
+
+        if (!found_any) {
+            if (!filter.empty()) {
+                ctx.outln("manall: no entry for '" + filter + "'");
+                return 1;
+            }
+            ctx.outln("manall: no commands found in YAML");
+            return 1;
+        }
+
+        ctx.outln("");
+        return 0;
     });
 
     // 8. neofetch — system info with ASCII art
