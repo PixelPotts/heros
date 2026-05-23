@@ -8,6 +8,7 @@
 #include "theme.h"
 #include "audio.h"
 #include "lockscreen.h"
+#include "network.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -203,6 +204,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Wire system services into registry so apps get them via context
     registry.set_system(&pm, &vfs, &sys_settings, &bus, &clipboard, &notifications, &audio);
 
+    // Network manager
+    NetworkManager network;
+    network.init();
+
     // Theme manager
     ThemeManager theme_mgr;
 
@@ -340,6 +345,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         // Notification manager: expire old toasts
         notifications.tick(SDL_GetTicks());
 
+        // Network manager: periodic updates
+        network.tick(SDL_GetTicks());
+
         // 1. Render scene to frost target
         SDL_SetRenderTarget(renderer, frost.scene_target());
         render_background(renderer, wallpaper, w, h);
@@ -361,6 +369,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
         // Render context menu
         ctx_menu.render(renderer, &fonts);
+
+        // Render network panel
+        network.render_panel(renderer, &fonts, w);
 
         // Render toast notifications on top of everything
         notifications.render(renderer, &fonts, w);
