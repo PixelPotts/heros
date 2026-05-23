@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "apps/journal_app.h"
+#include "apps/finance_app.h"
 #include <cmath>
 #include <algorithm>
 
@@ -285,17 +286,15 @@ void render_dock(const RenderCtx& ctx, const WindowManager& wm) {
 
 // ── Setup Default Windows ───────────────────────────────────────
 
-void setup_default_windows(WindowManager& wm, int screen_w, int /*screen_h*/) {
-    int jw = 500, jh = 380;
-    int jx = (screen_w - jw) / 2 - 20;
-    int jy = 70;
-    SDL_Rect rect = {jx, jy, jw, jh};
-
-    wm.open_window(
-        "Journal",
-        Icon::Journal,
+void setup_default_windows(WindowManager& wm, int screen_w, int screen_h) {
+    // Open Finance app maximized by default
+    SDL_Rect rect = {200, 70, 800, 500};
+    int id = wm.open_window(
+        "Finance",
+        Icon::Briefcase,
         rect,
         WF_Default,
-        std::make_unique<JournalApp>()
+        std::make_unique<FinanceApp>()
     );
+    wm.maximize(id, screen_w, screen_h);
 }
