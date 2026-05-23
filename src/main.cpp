@@ -11,6 +11,7 @@
 #include "network.h"
 #include "systray.h"
 #include "launcher.h"
+#include "workspaces.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -58,6 +59,9 @@ static void launch_autostart_apps(ProcessManager& pm, AppRegistry& registry,
 }
 
 // ── Handle dock click — works for any registered app ────────────
+
+// Forward declare for workspace tracking
+static WorkspaceManager* g_workspaces = nullptr;
 
 static bool handle_dock_click(int mx, int my, int screen_w, int screen_h,
                                AppRegistry& registry, WindowManager& wm) {
@@ -213,6 +217,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Theme manager
     ThemeManager theme_mgr;
 
+    // Workspace manager
+    WorkspaceManager workspaces;
+    workspaces.init(4);
+    g_workspaces = &workspaces;
+
     // App launcher (Spotlight-style)
     AppLauncher launcher;
 
@@ -276,6 +285,21 @@ int main(int /*argc*/, char* /*argv*/[]) {
         auto* fw = wm.focused_window();
         if (fw) { int sw2, sh2; SDL_GetWindowSize(window, &sw2, &sh2); wm.toggle_maximize(fw->id, sw2, sh2); }
     });
+    shortcuts.bind("ws.next", SDLK_RIGHT, KMOD_CTRL | KMOD_ALT, [&]() {
+        workspaces.switch_next(wm);
+    });
+    shortcuts.bind("ws.prev", SDLK_LEFT, KMOD_CTRL | KMOD_ALT, [&]() {
+        workspaces.switch_prev(wm);
+    });
+    shortcuts.bind("ws.switcher", SDLK_TAB, KMOD_GUI, [&]() {
+        workspaces.toggle_switcher();
+    });
+    // Ctrl+Alt+1-4 for direct workspace switching
+    for (int i = 0; i < 4; i++) {
+        shortcuts.bind("ws.goto_" + std::to_string(i+1), SDLK_1 + i, KMOD_CTRL | KMOD_ALT, [&, i]() {
+            workspaces.switch_to(i, wm);
+        });
+    }
 
     bool running = true;
     SDL_Event event;
@@ -297,6 +321,20 @@ int main(int /*argc*/, char* /*argv*/[]) {
             if (event.type == SDL_KEYDOWN) {
                 if (shortcuts.handle_key(event.key.keysym.sym, event.key.keysym.mod))
                     continue;
+            }
+
+            // Workspace switcher
+            if (workspaces.switcher_open()) {
+                if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+                    int w2, h2;
+                    SDL_GetWindowSize(window, &w2, &h2);
+                    workspaces.handle_switcher_click(event.button.x, event.button.y, wm, w2, h2);
+                    continue;
+                }
+                if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+                    workspaces.close_switcher();
+                    continue;
+                }
             }
 
             // App launcher consumes events when open
@@ -390,6 +428,20 @@ int main(int /*argc*/, char* /*argv*/[]) {
         pm.tick(wm);
         pm.sync(wm, registry);
 
+        // Track new windows in workspaces
+        for (auto& win : wm.windows()) {
+            bool tracked = false;
+            for (int i = 0; i < workspaces.count(); i++) {
+                if (workspaces.workspace(i).window_ids.count(win.id)) {
+                    tracked = true;
+                    break;
+                }
+            }
+            if (!tracked) {
+                workspaces.assign_window(win.id);
+            }
+        }
+
         // Notification manager: expire old toasts
         notifications.tick(SDL_GetTicks());
 
@@ -426,6 +478,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
         // Render toast notifications on top of everything
         notifications.render(renderer, &fonts, w);
+
+        // Workspace indicator (above dock)
+        workspaces.render_indicator(renderer, &fonts, w / 2, h - 12);
+
+        // Workspace switcher overlay
+        workspaces.render_switcher(renderer, &fonts, wm, w, h);
 
         // App launcher overlay
         launcher.render(renderer, &frost, &fonts, w, h);
