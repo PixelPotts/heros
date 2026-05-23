@@ -177,7 +177,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
     // App registry — single source of truth for installed apps
     AppRegistry registry;
-    register_builtin_apps(registry);
+    registry.load_dynamic_apps();      // load .so plugins from ~/.heros/apps/
+    register_builtin_apps(registry);   // fallback for any missing apps
 
     // Window manager + process manager
     WindowManager wm;
@@ -334,6 +335,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
     }
+
+    // Unload dynamic app plugins before tearing down SDL
+    registry.unload_all_dynamic();
 
     if (wallpaper) SDL_DestroyTexture(wallpaper);
     frost.cleanup();
