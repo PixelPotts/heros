@@ -54,15 +54,18 @@ class ProcessManager;
 class EventBus;
 class Clipboard;
 class NotificationManager;
+class AudioManager;
 
 class AppRegistry {
 public:
     // Set system-level pointers (called once at startup)
     void set_system(ProcessManager* pm, FileSystem* fs, SystemSettings* settings,
                     EventBus* bus = nullptr, Clipboard* clip = nullptr,
-                    NotificationManager* notif = nullptr) {
+                    NotificationManager* notif = nullptr,
+                    AudioManager* audio = nullptr) {
         pm_ = pm; fs_ = fs; settings_ = settings;
         bus_ = bus; clipboard_ = clip; notifications_ = notif;
+        audio_ = audio;
     }
 
     // Registration
@@ -122,6 +125,7 @@ private:
     EventBus* bus_ = nullptr;
     Clipboard* clipboard_ = nullptr;
     NotificationManager* notifications_ = nullptr;
+    AudioManager* audio_ = nullptr;
     std::vector<RunningInstance> running_;
 };
 

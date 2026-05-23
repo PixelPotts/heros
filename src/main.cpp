@@ -6,6 +6,7 @@
 #include "shortcuts.h"
 #include "context_menu.h"
 #include "theme.h"
+#include "audio.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -109,7 +110,7 @@ static bool handle_sidebar_click(int mx, int my, int screen_w, int screen_h,
 // (sync is now handled by ProcessManager::sync)
 
 int main(int /*argc*/, char* /*argv*/[]) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return 1;
     }
@@ -175,6 +176,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
     NotificationManager notifications;
     notifications.set_event_bus(&bus);
 
+    // Audio manager
+    AudioManager audio;
+    audio.init();
+    audio.play(SystemSound::Startup);
+
     // App registry — single source of truth for installed apps
     AppRegistry registry;
     registry.load_dynamic_apps();      // load .so plugins from ~/.heros/apps/
@@ -185,7 +191,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     ProcessManager pm;
 
     // Wire system services into registry so apps get them via context
-    registry.set_system(&pm, &vfs, &sys_settings, &bus, &clipboard, &notifications);
+    registry.set_system(&pm, &vfs, &sys_settings, &bus, &clipboard, &notifications, &audio);
 
     // Theme manager
     ThemeManager theme_mgr;
@@ -347,6 +353,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Unload dynamic app plugins before tearing down SDL
     registry.unload_all_dynamic();
 
+    audio.cleanup();
     if (wallpaper) SDL_DestroyTexture(wallpaper);
     frost.cleanup();
     fonts.cleanup();

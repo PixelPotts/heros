@@ -47,6 +47,7 @@ class ProcessManager;
 class EventBus;
 class Clipboard;
 class NotificationManager;
+class AudioManager;
 
 struct AppContext {
     int window_id = 0;
@@ -59,6 +60,7 @@ struct AppContext {
     EventBus* bus = nullptr;
     Clipboard* clipboard = nullptr;
     NotificationManager* notifications = nullptr;
+    AudioManager* audio = nullptr;
     int screen_w = 0, screen_h = 0;
 
     // Request the OS to close this app's window
