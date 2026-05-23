@@ -10,6 +10,7 @@
 #include "lockscreen.h"
 #include "network.h"
 #include "systray.h"
+#include "launcher.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -212,6 +213,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Theme manager
     ThemeManager theme_mgr;
 
+    // App launcher (Spotlight-style)
+    AppLauncher launcher;
+
     // System tray
     SystemTray systray;
     systray.init(&audio, &network, &notifications);
@@ -265,6 +269,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         auto* fw = wm.focused_window();
         if (fw) { int sw2, sh2; SDL_GetWindowSize(window, &sw2, &sh2); wm.snap_right(fw->id, sw2, sh2); }
     });
+    shortcuts.bind("launcher.toggle", SDLK_SPACE, KMOD_CTRL, [&]() {
+        launcher.toggle();
+    });
     shortcuts.bind("wm.snap_maximize", SDLK_UP, KMOD_GUI, [&]() {
         auto* fw = wm.focused_window();
         if (fw) { int sw2, sh2; SDL_GetWindowSize(window, &sw2, &sh2); wm.toggle_maximize(fw->id, sw2, sh2); }
@@ -286,9 +293,17 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 continue;
             }
 
-            // Global keyboard shortcuts
+            // Global keyboard shortcuts (before launcher so Ctrl+Space works)
             if (event.type == SDL_KEYDOWN) {
                 if (shortcuts.handle_key(event.key.keysym.sym, event.key.keysym.mod))
+                    continue;
+            }
+
+            // App launcher consumes events when open
+            if (launcher.is_open()) {
+                int w2, h2;
+                SDL_GetWindowSize(window, &w2, &h2);
+                if (launcher.handle_event(event, registry, wm, w2, h2))
                     continue;
             }
 
@@ -411,6 +426,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
         // Render toast notifications on top of everything
         notifications.render(renderer, &fonts, w);
+
+        // App launcher overlay
+        launcher.render(renderer, &frost, &fonts, w, h);
 
         // Lock screen renders on top of ALL UI
         lockscreen.render(renderer, &frost, &fonts, w, h, wallpaper);
