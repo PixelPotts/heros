@@ -86,13 +86,8 @@ void render_topbar(const RenderCtx& ctx) {
     draw::text_centered(ctx.r, ctx.fonts->body, "Sol 1.618 \xC2\xB7 Dawn",
                         ctx.w / 2, 10, DIM);
 
-    // Right: system icons
-    Icon icons[] = {Icon::Bell, Icon::Waveform, Icon::Grid, Icon::Volume, Icon::Power};
-    int ix = ctx.w - 24;
-    for (int i = 4; i >= 0; i--) {
-        draw::icon(ctx.r, icons[i], ix, 18, 16, DIM);
-        ix -= 28;
-    }
+    // Right: system tray icons are now rendered by SystemTray
+    // (see systray.cpp — called from main.cpp after render_topbar)
 }
 
 // ── Left Sidebar ────────────────────────────────────────────────

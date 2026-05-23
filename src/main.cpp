@@ -9,6 +9,7 @@
 #include "audio.h"
 #include "lockscreen.h"
 #include "network.h"
+#include "systray.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -211,6 +212,10 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Theme manager
     ThemeManager theme_mgr;
 
+    // System tray
+    SystemTray systray;
+    systray.init(&audio, &network, &notifications);
+
     // Keyboard shortcuts
     ShortcutManager shortcuts;
     ContextMenu ctx_menu;
@@ -314,6 +319,22 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 ctx_menu.on_mouse_move(event.motion.x, event.motion.y);
             }
 
+            // System tray clicks
+            if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+                int w2, h2;
+                SDL_GetWindowSize(window, &w2, &h2);
+                if (systray.handle_click(event.button.x, event.button.y, w2, 36)) {
+                    continue;
+                }
+            }
+
+            // System tray hover
+            if (event.type == SDL_MOUSEMOTION) {
+                int w2, h2;
+                SDL_GetWindowSize(window, &w2, &h2);
+                systray.on_mouse_move(event.motion.x, event.motion.y, w2, 36);
+            }
+
             // Dock + sidebar clicks — check before WM so they take priority
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
                 int w, h;
@@ -367,11 +388,14 @@ int main(int /*argc*/, char* /*argv*/[]) {
         wm.render(ctx);
         render_dock(ctx, wm, registry);
 
+        // System tray icons (rendered over topbar)
+        systray.render(renderer, &fonts, w, 36);
+
         // Render context menu
         ctx_menu.render(renderer, &fonts);
 
-        // Render network panel
-        network.render_panel(renderer, &fonts, w);
+        // Render system tray panels (volume, network, battery, notifications)
+        systray.render_panels(renderer, &fonts, w);
 
         // Render toast notifications on top of everything
         notifications.render(renderer, &fonts, w);
