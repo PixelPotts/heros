@@ -105,16 +105,17 @@ struct SidebarItem {
 };
 
 static const SidebarItem SIDEBAR_ITEMS[] = {
-    {"Sanctum",  Icon::Flower,    ""},
-    {"Library",  Icon::Book,      ""},
     {"Journal",  Icon::Journal,   "com.heros.journal"},
     {"Finance",  Icon::Briefcase, "com.heros.finance"},
+    {"Files",    Icon::Book,      "com.heros.files"},
+    {"Tasks",    Icon::Grid,      "com.heros.taskmanager"},
+    {"Sanctum",  Icon::Flower,    ""},
     {"Attune",   Icon::Sliders,   ""},
     {"Explore",  Icon::Compass,   ""},
     {"Communal", Icon::People,    ""},
     {"Settings", Icon::Gear,      "com.heros.settings"},
 };
-static const int SIDEBAR_COUNT = 8;
+static const int SIDEBAR_COUNT = 9;
 static const int SIDEBAR_X = 8, SIDEBAR_Y = 44, SIDEBAR_W = 180;
 static const int SIDEBAR_ITEM_H = 34;
 

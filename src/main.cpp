@@ -3,6 +3,8 @@
 #include "process.h"
 #include "vfs.h"
 #include "event_bus.h"
+#include "shortcuts.h"
+#include "context_menu.h"
 #include <SDL2/SDL_image.h>
 #include <cstdio>
 #include <cstdlib>
@@ -183,10 +185,39 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Wire system services into registry so apps get them via context
     registry.set_system(&pm, &vfs, &sys_settings, &bus, &clipboard, &notifications);
 
+    // Keyboard shortcuts
+    ShortcutManager shortcuts;
+    ContextMenu ctx_menu;
+
     // Launch autostart apps through process manager
     int sw, sh;
     SDL_GetWindowSize(window, &sw, &sh);
     launch_autostart_apps(pm, registry, wm, sw, sh);
+
+    // Register global shortcuts
+    shortcuts.bind("app.close", SDLK_w, KMOD_CTRL, [&]() {
+        auto* fw = wm.focused_window();
+        if (fw) wm.close_window(fw->id);
+    });
+    shortcuts.bind("app.minimize", SDLK_m, KMOD_CTRL, [&]() {
+        auto* fw = wm.focused_window();
+        if (fw) wm.minimize(fw->id);
+    });
+    shortcuts.bind("wm.task_manager", SDLK_DELETE, KMOD_CTRL | KMOD_ALT, [&]() {
+        int sw2, sh2;
+        SDL_GetWindowSize(window, &sw2, &sh2);
+        registry.launch("com.heros.taskmanager", wm, sw2, sh2);
+    });
+    shortcuts.bind("wm.settings", SDLK_COMMA, KMOD_CTRL, [&]() {
+        int sw2, sh2;
+        SDL_GetWindowSize(window, &sw2, &sh2);
+        registry.launch("com.heros.settings", wm, sw2, sh2);
+    });
+    shortcuts.bind("wm.files", SDLK_e, KMOD_CTRL, [&]() {
+        int sw2, sh2;
+        SDL_GetWindowSize(window, &sw2, &sh2);
+        registry.launch("com.heros.files", wm, sw2, sh2);
+    });
 
     bool running = true;
     SDL_Event event;
@@ -197,6 +228,48 @@ int main(int /*argc*/, char* /*argv*/[]) {
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE
                 && (event.key.keysym.mod & KMOD_CTRL))
                 running = false;
+
+            // Global keyboard shortcuts
+            if (event.type == SDL_KEYDOWN) {
+                if (shortcuts.handle_key(event.key.keysym.sym, event.key.keysym.mod))
+                    continue;
+            }
+
+            // Context menu clicks take priority
+            if (event.type == SDL_MOUSEBUTTONDOWN && ctx_menu.is_open()) {
+                if (ctx_menu.handle_click(event.button.x, event.button.y))
+                    continue;
+            }
+
+            // Right-click opens context menu on desktop
+            if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_RIGHT) {
+                int mx = event.button.x, my = event.button.y;
+                int w2, h2;
+                SDL_GetWindowSize(window, &w2, &h2);
+
+                // Only show desktop context menu if not clicking on a window
+                std::vector<MenuItem> items = {
+                    {"Settings", "Ctrl+,", Icon::Gear, true, false, [&]() {
+                        registry.launch("com.heros.settings", wm, w2, h2);
+                    }},
+                    {"Files", "Ctrl+E", Icon::Book, true, false, [&]() {
+                        registry.launch("com.heros.files", wm, w2, h2);
+                    }},
+                    {"Task Manager", "Ctrl+Alt+Del", Icon::Grid, true, true, [&]() {
+                        registry.launch("com.heros.taskmanager", wm, w2, h2);
+                    }},
+                    {"About HerOS", "", Icon::Ring, true, false, [&]() {
+                        registry.launch("com.heros.settings", wm, w2, h2);
+                    }},
+                };
+                ctx_menu.open(mx, my, std::move(items));
+                continue;
+            }
+
+            // Context menu hover tracking
+            if (event.type == SDL_MOUSEMOTION && ctx_menu.is_open()) {
+                ctx_menu.on_mouse_move(event.motion.x, event.motion.y);
+            }
 
             // Dock + sidebar clicks — check before WM so they take priority
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
@@ -247,6 +320,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
         render_right_sidebar(ctx);
         wm.render(ctx);
         render_dock(ctx, wm, registry);
+
+        // Render context menu
+        ctx_menu.render(renderer, &fonts);
 
         // Render toast notifications on top of everything
         notifications.render(renderer, &fonts, w);

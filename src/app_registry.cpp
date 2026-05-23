@@ -1,6 +1,9 @@
 #include "app_registry.h"
 #include "apps/journal_app.h"
 #include "apps/finance_app.h"
+#include "apps/settings_app.h"
+#include "apps/taskmanager_app.h"
+#include "apps/filemanager_app.h"
 #include <cstdio>
 #include <algorithm>
 
@@ -275,6 +278,63 @@ void register_builtin_apps(AppRegistry& registry) {
         m.autostart = true;  // opens by default on startup
         registry.register_app(m, []() {
             return std::make_unique<FinanceApp>();
+        });
+    }
+
+    // Settings
+    {
+        AppManifest m;
+        m.app_id = "com.heros.settings";
+        m.name = "Settings";
+        m.icon = Icon::Gear;
+        m.category = AppCategory::System;
+        m.default_rect = {0, 0, 750, 500};
+        m.min_w = 500;
+        m.min_h = 350;
+        m.singleton = true;
+        m.start_centered = true;
+        m.dock_pinned = true;
+        m.dock_order = 5;
+        registry.register_app(m, []() {
+            return std::make_unique<SettingsApp>();
+        });
+    }
+
+    // Task Manager
+    {
+        AppManifest m;
+        m.app_id = "com.heros.taskmanager";
+        m.name = "Task Manager";
+        m.icon = Icon::Grid;
+        m.category = AppCategory::System;
+        m.default_rect = {0, 0, 700, 450};
+        m.min_w = 450;
+        m.min_h = 300;
+        m.singleton = true;
+        m.start_centered = true;
+        m.dock_pinned = true;
+        m.dock_order = 6;
+        registry.register_app(m, []() {
+            return std::make_unique<TaskManagerApp>();
+        });
+    }
+
+    // File Manager
+    {
+        AppManifest m;
+        m.app_id = "com.heros.files";
+        m.name = "Files";
+        m.icon = Icon::Book;
+        m.category = AppCategory::System;
+        m.default_rect = {0, 0, 750, 500};
+        m.min_w = 400;
+        m.min_h = 300;
+        m.singleton = true;
+        m.start_centered = true;
+        m.dock_pinned = true;
+        m.dock_order = 7;
+        registry.register_app(m, []() {
+            return std::make_unique<FileManagerApp>();
         });
     }
 }
