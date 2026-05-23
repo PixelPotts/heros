@@ -1,4 +1,5 @@
 #include "journal_app.h"
+#include "../heros_sdk.h"
 #include "../ui.h"
 #include <cstdio>
 #include <cstring>
@@ -1216,3 +1217,5 @@ void JournalApp::on_scroll(int local_x, int local_y, int scroll_y) {
         if (list_scroll_ > max_scroll) list_scroll_ = max_scroll;
     }
 }
+
+HEROS_APP(JournalApp, "com.heros.journal", "Journal", "0.1.0")

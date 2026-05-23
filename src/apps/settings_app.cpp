@@ -1,4 +1,5 @@
 #include "settings_app.h"
+#include "../heros_sdk.h"
 #include "../ui.h"
 #include "../vfs.h"
 #include "../event_bus.h"
@@ -262,3 +263,5 @@ void SettingsApp::on_scroll(int local_x, int local_y, int scroll_y) {
     if (scroll_y_ < 0) scroll_y_ = 0;
     if (scroll_y_ > max_scroll) scroll_y_ = max_scroll;
 }
+
+HEROS_APP(SettingsApp, "com.heros.settings", "Settings", "0.1.0")

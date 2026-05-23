@@ -1,4 +1,5 @@
 #include "filemanager_app.h"
+#include "../heros_sdk.h"
 #include "../ui.h"
 #include <cstdio>
 #include <ctime>
@@ -264,3 +265,5 @@ void FileManagerApp::on_scroll(int local_x, int local_y, int scroll_y) {
     if (scroll_y_ < 0) scroll_y_ = 0;
     if (scroll_y_ > max_scroll) scroll_y_ = max_scroll;
 }
+
+HEROS_APP(FileManagerApp, "com.heros.files", "Files", "0.1.0")

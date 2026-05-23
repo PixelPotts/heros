@@ -1,4 +1,5 @@
 #include "taskmanager_app.h"
+#include "../heros_sdk.h"
 #include "../ui.h"
 #include "../process.h"
 #include <cstdio>
@@ -262,3 +263,5 @@ void TaskManagerApp::on_scroll(int local_x, int local_y, int scroll_y) {
     if (scroll_y_ < 0) scroll_y_ = 0;
     if (scroll_y_ > max_scroll) scroll_y_ = max_scroll;
 }
+
+HEROS_APP(TaskManagerApp, "com.heros.taskmanager", "Task Manager", "0.1.0")

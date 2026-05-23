@@ -1,4 +1,5 @@
 #include "finance_app.h"
+#include "../heros_sdk.h"
 #include "../ui.h"
 #include <cmath>
 #include <cstdio>
@@ -432,3 +433,5 @@ void FinanceApp::on_scroll(int local_x, int local_y, int scroll_y) {
     if (scroll_y_ < 0) scroll_y_ = 0;
     if (scroll_y_ > max_scroll) scroll_y_ = max_scroll;
 }
+
+HEROS_APP(FinanceApp, "com.heros.finance", "Finance", "0.1.0")
