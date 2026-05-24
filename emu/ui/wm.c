@@ -14,6 +14,9 @@ static int drag_win = -1;
 static int drag_type = 0;   /* 1=move, 2=resize */
 static int drag_ox, drag_oy;
 
+/* Last mouse button pressed (1=left, 2=middle, 3=right) */
+static int last_btn = 1;
+
 void wm_init(void)
 {
     for (int i = 0; i < MAX_WINDOWS; i++) {
@@ -151,9 +154,14 @@ static int window_at(int x, int y)
     return best;
 }
 
+int wm_last_mouse_button(void)
+{
+    return last_btn;
+}
+
 void wm_handle_mouse_down(int x, int y, int button)
 {
-    (void)button;
+    last_btn = button;
     int win_id = window_at(x, y);
     if (win_id < 0) return;
 

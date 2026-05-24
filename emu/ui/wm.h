@@ -28,5 +28,6 @@ void    wm_tick(void);
 int     wm_window_count(void);
 Window *wm_get_window(int win_id);
 int     wm_find_by_app(int app_id);
+int     wm_last_mouse_button(void);
 
 #endif
