@@ -12,7 +12,7 @@ typedef struct {
 
 static void settings_render(AppContent *self, Rect cr)
 {
-    SettingsData *sd = (SettingsData *)self->data;
+    SettingsData *sd __attribute__((unused)) = (SettingsData *)self->data;
     const ThemeColors *tc = theme_colors();
     int mx, my;
     hal_input_mouse_pos(&mx, &my);

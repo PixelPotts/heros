@@ -10,7 +10,7 @@ static int       task_count = 0;
 static int       sched_enabled = 0;
 
 /* Saved trap frame pointer for the current task during context switch */
-static trap_frame_t *current_frame = (void *)0;
+static trap_frame_t *current_frame __attribute__((unused)) = (void *)0;
 
 void sched_init(void)
 {

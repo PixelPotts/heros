@@ -1,0 +1,8 @@
+heros-emu
+kernel.elf
+kernel.bin
+disk.img
+tools/mkfat16
+test/kernel.elf
+test/kernel.bin
+*.o

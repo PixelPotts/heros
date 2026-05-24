@@ -23,7 +23,7 @@ void trap_dispatch(trap_frame_t *frame)
             (*(volatile uint32_t *)0x02000000) = 0;
             break;
         default:
-            kprintf("[trap] Unknown interrupt: %u\n", code);
+            kprintf("[trap] Unknown interrupt: %u\n", (unsigned)code);
             break;
         }
     } else {
@@ -40,7 +40,7 @@ void trap_dispatch(trap_frame_t *frame)
             uint32_t mtval;
             __asm__ volatile("csrr %0, mtval" : "=r"(mtval));
             kpanic("Illegal instruction at 0x%08x (insn=0x%08x)\n",
-                   frame->mepc, mtval);
+                   (unsigned)frame->mepc, (unsigned)mtval);
             break;
         }
 
@@ -51,13 +51,13 @@ void trap_dispatch(trap_frame_t *frame)
             uint32_t mtval;
             __asm__ volatile("csrr %0, mtval" : "=r"(mtval));
             kpanic("Memory fault at pc=0x%08x, addr=0x%08x, cause=%u\n",
-                   frame->mepc, mtval, mcause);
+                   (unsigned)frame->mepc, (unsigned)mtval, (unsigned)mcause);
             break;
         }
 
         default:
             kpanic("Unhandled exception: mcause=%u, mepc=0x%08x\n",
-                   mcause, frame->mepc);
+                   (unsigned)mcause, (unsigned)frame->mepc);
             break;
         }
     }

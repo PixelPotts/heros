@@ -21,7 +21,7 @@ void fb_driver_init(void)
     }
     memset(backbuffer, 0, FB_SIZE);
     kprintf("[fb] Backbuffer at 0x%08x (%u x %u, %u bytes)\n",
-            (uint32_t)(uintptr_t)backbuffer, FB_WIDTH, FB_HEIGHT, FB_SIZE);
+            (unsigned)(uintptr_t)backbuffer, (unsigned)FB_WIDTH, (unsigned)FB_HEIGHT, (unsigned)FB_SIZE);
 }
 
 void fb_driver_flush(void)

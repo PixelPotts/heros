@@ -96,7 +96,7 @@ void hal_draw_filled_rect_blend(hal_rect_t r, hal_color_t c)
 }
 
 /* ── Rounded rectangle ──────────────────────────────────────── */
-static void draw_rounded_corners(int cx, int cy, int radius,
+static void __attribute__((unused)) draw_rounded_corners(int cx, int cy, int radius,
                                    int x0, int y0, int x1, int y1,
                                    hal_color_t c, int filled, int blend)
 {

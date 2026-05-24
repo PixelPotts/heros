@@ -35,7 +35,7 @@ int disk_read_sector(uint32_t sector, void *buf)
     }
 
     kprintf("[disk] Read error, sector %u, status %u\n",
-            sector, DISK_REG_STATUS);
+            (unsigned)sector, (unsigned)DISK_REG_STATUS);
     DISK_REG_STATUS = 0;
     return -1;
 }
@@ -56,7 +56,7 @@ int disk_write_sector(uint32_t sector, const void *buf)
     }
 
     kprintf("[disk] Write error, sector %u, status %u\n",
-            sector, DISK_REG_STATUS);
+            (unsigned)sector, (unsigned)DISK_REG_STATUS);
     DISK_REG_STATUS = 0;
     return -1;
 }

@@ -223,3 +223,69 @@ int __modsi3(int num, int den)
 {
     return num - __divsi3(num, den) * den;
 }
+
+/* ── 64-bit division (GCC emits for uint64_t / uint64_t) ─────── */
+typedef unsigned long long uint64;
+
+uint64 __udivdi3(uint64 num, uint64 den)
+{
+    if (den == 0) return 0;
+    if (num < den) return 0;
+    if (den == 1) return num;
+
+    /* Handle 32-bit denominator (common case) */
+    if ((den >> 32) == 0) {
+        uint32_t d = (uint32_t)den;
+        uint32_t q_hi = 0, q_lo = 0;
+        uint32_t n_hi = (uint32_t)(num >> 32);
+        uint32_t n_lo = (uint32_t)num;
+
+        if (n_hi >= d) {
+            q_hi = n_hi / d;
+            n_hi = n_hi % d;
+        }
+        /* Combine remainder with low word */
+        uint64 combined = ((uint64)n_hi << 32) | n_lo;
+        /* Simple long division */
+        q_lo = 0;
+        for (int i = 31; i >= 0; i--) {
+            uint64 shifted = (uint64)d << i;
+            if (combined >= shifted) {
+                q_lo |= (1U << i);
+                combined -= shifted;
+            }
+        }
+        return ((uint64)q_hi << 32) | q_lo;
+    }
+
+    /* Full 64-bit division via binary long division */
+    uint64 q = 0;
+    uint64 r = 0;
+    for (int i = 63; i >= 0; i--) {
+        r = (r << 1) | ((num >> i) & 1);
+        if (r >= den) {
+            r -= den;
+            q |= ((uint64)1 << i);
+        }
+    }
+    return q;
+}
+
+uint64 __umoddi3(uint64 num, uint64 den)
+{
+    return num - __udivdi3(num, den) * den;
+}
+
+long long __divdi3(long long num, long long den)
+{
+    int neg = 0;
+    if (num < 0) { neg = !neg; num = -num; }
+    if (den < 0) { neg = !neg; den = -den; }
+    long long q = (long long)__udivdi3((uint64)num, (uint64)den);
+    return neg ? -q : q;
+}
+
+long long __moddi3(long long num, long long den)
+{
+    return num - __divdi3(num, den) * den;
+}

@@ -42,8 +42,8 @@ void mm_init(uint32_t start, uint32_t end)
     used_pages = 0;
 
     kprintf("[mm] Heap: 0x%08x - 0x%08x (%u pages, %u MB)\n",
-            heap_base, heap_end, total_pages,
-            (total_pages * PAGE_SIZE) / (1024 * 1024));
+            (unsigned)heap_base, (unsigned)heap_end, (unsigned)total_pages,
+            (unsigned)((total_pages * PAGE_SIZE) / (1024 * 1024)));
 }
 
 void *page_alloc(size_t count)

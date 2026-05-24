@@ -231,9 +231,9 @@ void fs_init(void)
 
     fs.mounted = 1;
     kprintf("[fs] FAT16 mounted: %u sectors, %u bytes/cluster, root at sector %u\n",
-            fs.total_sectors,
-            (unsigned)fs.sectors_per_cluster * 512,
-            fs.root_start);
+            (unsigned)fs.total_sectors,
+            (unsigned)(fs.sectors_per_cluster * 512),
+            (unsigned)fs.root_start);
 }
 
 int fs_open(const char *path, int flags)

@@ -133,7 +133,7 @@ void syscall_dispatch(trap_frame_t *frame)
 
     default:
         kprintf("[syscall] Unknown syscall %u from task %d\n",
-                num, sched_current_id());
+                (unsigned)num, sched_current_id());
         frame->a0 = (uint32_t)-1;
         break;
     }
