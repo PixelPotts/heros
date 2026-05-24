@@ -351,25 +351,72 @@ void cpu_step(cpu_t *cpu)
         uint32_t b = cpu->x[rs2];
         uint32_t result = 0;
 
-        switch (funct3) {
-        case F3_ADD:
-            result = (funct7 & 0x20) ? (a - b) : (a + b);
-            break;
-        case F3_SLL:  result = a << (b & 0x1F);                       break;
-        case F3_SLT:  result = ((int32_t)a < (int32_t)b) ? 1 : 0;    break;
-        case F3_SLTU: result = (a < b) ? 1 : 0;                       break;
-        case F3_XOR:  result = a ^ b;                                  break;
-        case F3_SRL:
-            if (funct7 & 0x20)
-                result = (uint32_t)((int32_t)a >> (b & 0x1F));  /* SRA */
-            else
-                result = a >> (b & 0x1F);                        /* SRL */
-            break;
-        case F3_OR:   result = a | b;                                  break;
-        case F3_AND:  result = a & b;                                  break;
-        default:
-            trap(cpu, CAUSE_ILLEGAL_INSN, insn);
-            return;
+        if (funct7 == 0x01) {
+            /* ── M extension (MUL/DIV/REM) ──────────────────── */
+            switch (funct3) {
+            case 0: /* MUL — lower 32 bits of rs1*rs2 */
+                result = a * b;
+                break;
+            case 1: { /* MULH — upper 32 bits of signed*signed */
+                int64_t r = (int64_t)(int32_t)a * (int64_t)(int32_t)b;
+                result = (uint32_t)(r >> 32);
+                break;
+            }
+            case 2: { /* MULHSU — upper 32 of signed*unsigned */
+                int64_t r = (int64_t)(int32_t)a * (uint64_t)b;
+                result = (uint32_t)(r >> 32);
+                break;
+            }
+            case 3: { /* MULHU — upper 32 of unsigned*unsigned */
+                uint64_t r = (uint64_t)a * (uint64_t)b;
+                result = (uint32_t)(r >> 32);
+                break;
+            }
+            case 4: /* DIV — signed division */
+                if (b == 0)
+                    result = 0xFFFFFFFF;  /* div by zero → -1 */
+                else if ((int32_t)a == (int32_t)0x80000000 && (int32_t)b == -1)
+                    result = a;  /* overflow */
+                else
+                    result = (uint32_t)((int32_t)a / (int32_t)b);
+                break;
+            case 5: /* DIVU — unsigned division */
+                result = (b == 0) ? 0xFFFFFFFF : (a / b);
+                break;
+            case 6: /* REM — signed remainder */
+                if (b == 0)
+                    result = a;
+                else if ((int32_t)a == (int32_t)0x80000000 && (int32_t)b == -1)
+                    result = 0;
+                else
+                    result = (uint32_t)((int32_t)a % (int32_t)b);
+                break;
+            case 7: /* REMU — unsigned remainder */
+                result = (b == 0) ? a : (a % b);
+                break;
+            }
+        } else {
+            /* ── Base I ALU ops ──────────────────────────────── */
+            switch (funct3) {
+            case F3_ADD:
+                result = (funct7 & 0x20) ? (a - b) : (a + b);
+                break;
+            case F3_SLL:  result = a << (b & 0x1F);                       break;
+            case F3_SLT:  result = ((int32_t)a < (int32_t)b) ? 1 : 0;    break;
+            case F3_SLTU: result = (a < b) ? 1 : 0;                       break;
+            case F3_XOR:  result = a ^ b;                                  break;
+            case F3_SRL:
+                if (funct7 & 0x20)
+                    result = (uint32_t)((int32_t)a >> (b & 0x1F));  /* SRA */
+                else
+                    result = a >> (b & 0x1F);                        /* SRL */
+                break;
+            case F3_OR:   result = a | b;                                  break;
+            case F3_AND:  result = a & b;                                  break;
+            default:
+                trap(cpu, CAUSE_ILLEGAL_INSN, insn);
+                return;
+            }
         }
         if (rd) cpu->x[rd] = result;
         break;

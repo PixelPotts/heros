@@ -18,9 +18,12 @@
 #define DISK_BASE       0x10001000
 #define DISK_SIZE       0x00000020
 
+#define INPUT_BASE      0x10002000
+#define INPUT_SIZE      0x00000040
+
 #define FB_BASE         0x20000000
-#define FB_WIDTH        2560
-#define FB_HEIGHT       1440
+#define FB_WIDTH        1280
+#define FB_HEIGHT       720
 #define FB_BPP          4                   /* RGBA */
 #define FB_SIZE         (FB_WIDTH * FB_HEIGHT * FB_BPP)  /* 14,745,600 */
 

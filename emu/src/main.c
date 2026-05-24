@@ -12,6 +12,7 @@
 #include "uart.h"
 #include "clint.h"
 #include "disk.h"
+#include "input.h"
 #include "fb.h"
 
 #define BATCH_SIZE     10000       /* instructions per SDL poll */
@@ -113,6 +114,7 @@ int main(int argc, char **argv)
     uart_init();
     clint_init();
     disk_init(disk_path, ram);
+    input_init();
     fb_init(renderer);
 
     /* ── Init CPU ───────────────────────────────────────────────── */
@@ -145,21 +147,59 @@ int main(int argc, char **argv)
 
         /* ── Poll SDL events ────────────────────────────────────── */
         SDL_Event ev;
+        int win_w, win_h;
+        SDL_GetWindowSize(window, &win_w, &win_h);
+
         while (SDL_PollEvent(&ev)) {
             switch (ev.type) {
             case SDL_QUIT:
                 running = false;
                 break;
             case SDL_KEYDOWN:
-                if (ev.key.keysym.sym == SDLK_ESCAPE) {
+                if (ev.key.keysym.sym == SDLK_ESCAPE &&
+                    (ev.key.keysym.mod & KMOD_CTRL)) {
                     running = false;
-                }
-                /* Map printable keys to UART input (basic) */
-                else if (ev.key.keysym.sym < 128 && ev.key.keysym.sym >= 32) {
-                    /* Would need a proper key-to-char mapping for full support.
-                       For now, UART input comes from stdin (host terminal). */
+                } else {
+                    input_push_key(ev.key.keysym.scancode,
+                                   ev.key.keysym.mod, 1);
                 }
                 break;
+            case SDL_KEYUP:
+                input_push_key(ev.key.keysym.scancode,
+                               ev.key.keysym.mod, 0);
+                break;
+            case SDL_TEXTINPUT:
+                for (int i = 0; ev.text.text[i]; i++) {
+                    if ((uint8_t)ev.text.text[i] < 128)
+                        input_push_text(ev.text.text[i]);
+                }
+                break;
+            case SDL_MOUSEMOTION: {
+                int mx = ev.motion.x * FB_WIDTH / win_w;
+                int my = ev.motion.y * FB_HEIGHT / win_h;
+                input_push_mouse_move(mx, my);
+                break;
+            }
+            case SDL_MOUSEBUTTONDOWN: {
+                int mx = ev.button.x * FB_WIDTH / win_w;
+                int my = ev.button.y * FB_HEIGHT / win_h;
+                input_push_mouse_button(mx, my, ev.button.button, 1);
+                break;
+            }
+            case SDL_MOUSEBUTTONUP: {
+                int mx = ev.button.x * FB_WIDTH / win_w;
+                int my = ev.button.y * FB_HEIGHT / win_h;
+                input_push_mouse_button(mx, my, ev.button.button, 0);
+                break;
+            }
+            case SDL_MOUSEWHEEL: {
+                int mx, my;
+                SDL_GetMouseState(&mx, &my);
+                mx = mx * FB_WIDTH / win_w;
+                my = my * FB_HEIGHT / win_h;
+                input_push_scroll(mx, my, ev.wheel.y);
+                break;
+            }
             }
         }
 

@@ -2,6 +2,7 @@
 #include "uart.h"
 #include "clint.h"
 #include "disk.h"
+#include "input.h"
 #include "fb.h"
 #include <stdio.h>
 
@@ -82,6 +83,9 @@ uint32_t bus_read32(uint32_t addr, bus_result_t *res)
 
     if (in_range(addr, DISK_BASE, DISK_SIZE))
         return disk_read(addr - DISK_BASE);
+
+    if (in_range(addr, INPUT_BASE, INPUT_SIZE))
+        return input_read(addr - INPUT_BASE);
 
     if (in_range(addr, FB_CTRL_BASE, FB_CTRL_SIZE))
         return fb_ctrl_read(addr - FB_CTRL_BASE);
@@ -170,6 +174,11 @@ void bus_write32(uint32_t addr, uint32_t val, bus_result_t *res)
 
     if (in_range(addr, DISK_BASE, DISK_SIZE)) {
         disk_write(addr - DISK_BASE, val);
+        return;
+    }
+
+    if (in_range(addr, INPUT_BASE, INPUT_SIZE)) {
+        input_write(addr - INPUT_BASE, val);
         return;
     }
 
