@@ -162,16 +162,16 @@ void desktop_main(void)
 
         /* ── FPS counter ─────────────────────────────────────── */
         frame_count++;
-        if (hal_get_ticks() - last_fps_time >= 5000) {
+        if (hal_get_ticks() - last_fps_time >= 2000) {
             fps = (int)(frame_count * 1000 / (hal_get_ticks() - last_fps_time));
             kprintf("[desktop] FPS: %d\n", fps);
             frame_count = 0;
             last_fps_time = hal_get_ticks();
         }
 
-        /* ── Frame rate limiting (~30 fps target) ────────────── */
+        /* ── Frame rate limiting ──────────────────────────────── */
         uint32_t frame_time = hal_get_ticks() - frame_start;
-        if (frame_time < 33)
-            sched_sleep_ms(33 - frame_time);
+        if (frame_time < 10)
+            sched_sleep_ms(10 - frame_time);
     }
 }
