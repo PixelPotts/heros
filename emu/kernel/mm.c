@@ -13,6 +13,9 @@ static uint32_t total_pages;
 static uint32_t used_pages;
 static uint32_t heap_base;
 
+/* Forward declaration — must be called from mm_init */
+static void slab_init_classes(void);
+
 static inline void bitmap_set(uint32_t page)
 {
     page_bitmap[page / 32] |= (1U << (page % 32));
@@ -44,6 +47,10 @@ void mm_init(uint32_t start, uint32_t end)
     kprintf("[mm] Heap: 0x%08x - 0x%08x (%u pages, %u MB)\n",
             (unsigned)heap_base, (unsigned)heap_end, (unsigned)total_pages,
             (unsigned)((total_pages * PAGE_SIZE) / (1024 * 1024)));
+
+    /* Init slab allocator size classes (can't rely on __attribute__((constructor))
+       in bare-metal — no .init_array processing in boot.S) */
+    slab_init_classes();
 }
 
 void *page_alloc(size_t count)
@@ -223,8 +230,8 @@ size_t mm_used_bytes(void)
     return total;
 }
 
-/* Initialize slab size classes (called from mm_init context) */
-static void __attribute__((constructor)) slab_init_classes(void)
+/* Initialize slab size classes */
+static void slab_init_classes(void)
 {
     for (int i = 0; i < SLAB_CLASSES; i++) {
         slabs[i].obj_size = 1 << (SLAB_MIN_SHIFT + i);
