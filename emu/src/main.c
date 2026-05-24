@@ -127,6 +127,8 @@ int main(int argc, char **argv)
     /* ── Main loop ──────────────────────────────────────────────── */
     bool     running   = true;
     uint32_t last_fb   = SDL_GetTicks();
+    uint32_t last_fps  = SDL_GetTicks();
+    int      frame_count = 0;
 
     while (running && !cpu.halted) {
         /* Execute a batch of instructions */
@@ -215,6 +217,17 @@ int main(int argc, char **argv)
         if (fb_is_dirty() && (now - last_fb >= FB_REFRESH_MS)) {
             fb_refresh();
             last_fb = now;
+            frame_count++;
+        }
+
+        /* ── Update FPS in window title every second ──────────── */
+        if (now - last_fps >= 1000) {
+            char title[64];
+            snprintf(title, sizeof(title), "HerOS RISC-V Emulator — %d FPS", frame_count);
+            SDL_SetWindowTitle(window, title);
+            fprintf(stderr, "[emu] %d FPS\n", frame_count);
+            frame_count = 0;
+            last_fps = now;
         }
     }
 
