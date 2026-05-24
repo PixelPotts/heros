@@ -14,7 +14,8 @@
 #define GPU_DST_REG     (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x1C))
 #define GPU_STRIDE_REG  (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x20))
 
-#define GPU_CMD_FILL_BUF 3
+#define GPU_CMD_FILL_BUF  3
+#define GPU_CMD_BLEND_BUF 4
 
 void hal_fb_init(void)
 {
@@ -112,6 +113,24 @@ void hal_fb_fill_rect_blend(hal_rect_t r, hal_color_t c)
     uint8_t *buf = fb_get_backbuffer();
     if (!buf) return;
 
+    /* Use GPU for large blended fills */
+    int w = x1 - x0;
+    int h = y1 - y0;
+    if (w >= 16) {
+        uint32_t pixel = (uint32_t)c.r | ((uint32_t)c.g << 8)
+                       | ((uint32_t)c.b << 16) | ((uint32_t)c.a << 24);
+        GPU_X_REG      = (uint32_t)x0;
+        GPU_Y_REG      = (uint32_t)y0;
+        GPU_W_REG      = (uint32_t)w;
+        GPU_H_REG      = (uint32_t)h;
+        GPU_COLOR_REG  = pixel;
+        GPU_DST_REG    = (uint32_t)(uintptr_t)buf;
+        GPU_STRIDE_REG = (uint32_t)(HAL_SCREEN_W * 4);
+        GPU_CMD_REG    = GPU_CMD_BLEND_BUF;
+        return;
+    }
+
+    /* Software fallback for small rects */
     uint32_t sa = c.a;
     uint32_t da = 255 - sa;
 

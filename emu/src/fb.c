@@ -131,6 +131,31 @@ void gpu_write(uint32_t offset, uint32_t val)
             }
             break;
         }
+        case GPU_CMD_BLEND_BUF: {
+            /* Alpha-blend fill rect in a RAM-based buffer */
+            uint32_t stride = gpu_regs[GPU_STRIDE / 4];
+            if (dst < RAM_BASE || !stride) break;
+            uint32_t buf_off = dst - RAM_BASE;
+            uint8_t sr = (uint8_t)(color);
+            uint8_t sg = (uint8_t)(color >> 8);
+            uint8_t sb = (uint8_t)(color >> 16);
+            uint8_t sa = (uint8_t)(color >> 24);
+            uint32_t da = 255 - sa;
+
+            for (uint32_t row = y; row < y + h; row++) {
+                uint32_t row_start = buf_off + row * stride + x * 4;
+                if (row_start + w * 4 > RAM_SIZE) break;
+                uint8_t *p = ram + row_start;
+                for (uint32_t col = 0; col < w; col++) {
+                    p[0] = (uint8_t)((sr * sa + p[0] * da) / 255);
+                    p[1] = (uint8_t)((sg * sa + p[1] * da) / 255);
+                    p[2] = (uint8_t)((sb * sa + p[2] * da) / 255);
+                    p[3] = 255;
+                    p += 4;
+                }
+            }
+            break;
+        }
         case GPU_CMD_COPY: {
             /* memcpy: src→dst, length = W bytes */
             if (src >= RAM_BASE && dst >= RAM_BASE) {

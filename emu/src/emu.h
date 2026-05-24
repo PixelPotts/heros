@@ -64,9 +64,10 @@
 #define GPU_STRIDE      0x20   /* bytes per row (for blit) */
 
 /* GPU commands */
-#define GPU_CMD_FILL    1      /* fill rect in backbuffer */
-#define GPU_CMD_COPY    2      /* memcpy src→dst, length = W */
-#define GPU_CMD_FILL_BUF 3    /* fill rect in RAM buffer */
+#define GPU_CMD_FILL      1    /* fill rect in backbuffer */
+#define GPU_CMD_COPY      2    /* memcpy src→dst, length = W */
+#define GPU_CMD_FILL_BUF  3   /* fill rect in RAM buffer */
+#define GPU_CMD_BLEND_BUF 4   /* alpha-blend fill rect in RAM buffer */
 
 /* ── Framebuffer control offsets ────────────────────────────────── */
 #define FB_CTRL_WIDTH   0x00
