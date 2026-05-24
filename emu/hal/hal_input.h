@@ -119,4 +119,7 @@ int  hal_input_poll(hal_event_t *evt);
 /* Get current mouse position */
 void hal_input_mouse_pos(int *x, int *y);
 
+/* Get current modifier key state */
+uint16_t hal_input_get_mod(void);
+
 #endif

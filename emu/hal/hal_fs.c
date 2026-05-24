@@ -39,3 +39,8 @@ int hal_fs_unlink(const char *path)
 {
     return fs_unlink(path);
 }
+
+int hal_fs_rename(const char *old_path, const char *new_path)
+{
+    return fs_rename(old_path, new_path);
+}

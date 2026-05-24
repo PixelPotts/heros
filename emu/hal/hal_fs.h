@@ -12,5 +12,6 @@ int  hal_fs_stat(const char *path, fs_stat_t *st);
 int  hal_fs_readdir(int fd, fs_dirent_t *entry);
 int  hal_fs_mkdir(const char *path);
 int  hal_fs_unlink(const char *path);
+int  hal_fs_rename(const char *old_path, const char *new_path);
 
 #endif

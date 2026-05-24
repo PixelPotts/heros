@@ -158,7 +158,7 @@ void input_push_mouse_move(int x, int y)
     ring_push(&evt);
 }
 
-void input_push_mouse_button(int x, int y, uint8_t button, int down)
+void input_push_mouse_button(int x, int y, uint8_t button, int down, uint32_t mod)
 {
     cur_mouse_x = (uint32_t)x;
     cur_mouse_y = (uint32_t)y;
@@ -166,6 +166,7 @@ void input_push_mouse_button(int x, int y, uint8_t button, int down)
     input_evt_t evt = {0};
     evt.type = 3;
     evt.state = down ? 1 : 2;
+    evt.mod = mod;
     evt.mouse_x = (uint32_t)x;
     evt.mouse_y = (uint32_t)y;
     evt.mouse_btn = button;

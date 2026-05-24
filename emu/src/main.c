@@ -192,13 +192,13 @@ int main(int argc, char **argv)
             case SDL_MOUSEBUTTONDOWN: {
                 int mx = ev.button.x * FB_WIDTH / win_w;
                 int my = ev.button.y * FB_HEIGHT / win_h;
-                input_push_mouse_button(mx, my, ev.button.button, 1);
+                input_push_mouse_button(mx, my, ev.button.button, 1, SDL_GetModState());
                 break;
             }
             case SDL_MOUSEBUTTONUP: {
                 int mx = ev.button.x * FB_WIDTH / win_w;
                 int my = ev.button.y * FB_HEIGHT / win_h;
-                input_push_mouse_button(mx, my, ev.button.button, 0);
+                input_push_mouse_button(mx, my, ev.button.button, 0, SDL_GetModState());
                 break;
             }
             case SDL_MOUSEWHEEL: {

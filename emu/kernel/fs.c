@@ -97,6 +97,49 @@ static uint16_t fat_read(uint16_t cluster)
     return (uint16_t)(sector_buf[offset] | (sector_buf[offset + 1] << 8));
 }
 
+static int fat_write(uint16_t cluster, uint16_t value)
+{
+    uint32_t fat_offset = cluster * 2;
+    uint32_t fat_sector = fs.fat_start + (fat_offset / 512);
+    uint32_t offset = fat_offset % 512;
+
+    if (disk_read_sector(fat_sector, sector_buf) != 0)
+        return -1;
+
+    sector_buf[offset]     = (uint8_t)(value & 0xFF);
+    sector_buf[offset + 1] = (uint8_t)(value >> 8);
+
+    /* Write to both FAT copies */
+    if (disk_write_sector(fat_sector, sector_buf) != 0)
+        return -1;
+    disk_write_sector(fat_sector + fs.fat_size, sector_buf);
+    return 0;
+}
+
+/* Allocate a free cluster, mark it as end-of-chain */
+static uint16_t fat_alloc(void)
+{
+    /* Scan FAT for a free entry (value == 0x0000) */
+    uint32_t total_clusters = (fs.total_sectors - fs.data_start) / fs.sectors_per_cluster + 2;
+    for (uint16_t c = 2; c < total_clusters && c < 0xFFF0; c++) {
+        if (fat_read(c) == 0x0000) {
+            fat_write(c, 0xFFFF);  /* mark as end-of-chain */
+            return c;
+        }
+    }
+    return 0;  /* no free cluster */
+}
+
+/* Free entire cluster chain starting at cluster */
+static void fat_free_chain(uint16_t cluster)
+{
+    while (cluster >= 2 && cluster < 0xFFF8) {
+        uint16_t next = fat_read(cluster);
+        fat_write(cluster, 0x0000);
+        cluster = next;
+    }
+}
+
 /* Convert 8.3 FAT name to readable name */
 static void fat_name_to_string(const char *fat_name, char *out)
 {
@@ -170,6 +213,35 @@ static int find_root_entry(const char *name, fat16_dirent_t *out)
 
             if (memcmp(entries[i].name, fat_name, 11) == 0) {
                 memcpy(out, &entries[i], sizeof(fat16_dirent_t));
+                return 0;
+            }
+        }
+    }
+    return -1;
+}
+
+/* Find entry in root dir and return its sector + index for modification */
+static int find_root_entry_loc(const char *name, uint32_t *out_sector, int *out_idx)
+{
+    char fat_name[11];
+    string_to_fat_name(name, fat_name);
+
+    for (uint32_t s = 0; s < fs.root_sectors; s++) {
+        if (disk_read_sector(fs.root_start + s, sector_buf) != 0)
+            return -1;
+
+        fat16_dirent_t *entries = (fat16_dirent_t *)sector_buf;
+        int per_sector = 512 / sizeof(fat16_dirent_t);
+
+        for (int i = 0; i < per_sector; i++) {
+            if (entries[i].name[0] == 0x00) return -1;
+            if ((uint8_t)entries[i].name[0] == 0xE5) continue;
+            if (entries[i].attr & ATTR_VOLUME_ID) continue;
+            if (entries[i].attr == ATTR_LFN) continue;
+
+            if (memcmp(entries[i].name, fat_name, 11) == 0) {
+                *out_sector = fs.root_start + s;
+                *out_idx = i;
                 return 0;
             }
         }
@@ -445,12 +517,135 @@ int fs_readdir(int fd, void *entry_out)
 
 int fs_mkdir(const char *path)
 {
-    (void)path;
-    return -1;  /* not implemented yet */
+    if (!fs.mounted) return -1;
+
+    uint16_t parent;
+    char name[FS_MAX_NAME];
+    resolve_path(path, &parent, name);
+    if (name[0] == '\0') return -1;  /* can't mkdir root */
+
+    /* Check if already exists */
+    fat16_dirent_t existing;
+    if (find_root_entry(name, &existing) == 0)
+        return -1;  /* already exists */
+
+    /* Allocate a cluster for the directory data */
+    uint16_t cluster = fat_alloc();
+    if (cluster == 0) return -1;
+
+    /* Find an empty entry in root directory */
+    for (uint32_t s = 0; s < fs.root_sectors; s++) {
+        if (disk_read_sector(fs.root_start + s, sector_buf) != 0)
+            return -1;
+        fat16_dirent_t *entries = (fat16_dirent_t *)sector_buf;
+        int per_sector = 512 / 32;
+        for (int i = 0; i < per_sector; i++) {
+            if (entries[i].name[0] == 0x00 || (uint8_t)entries[i].name[0] == 0xE5) {
+                string_to_fat_name(name, entries[i].name);
+                entries[i].attr = ATTR_DIRECTORY;
+                entries[i].first_cluster = cluster;
+                entries[i].file_size = 0;
+                memset(entries[i].reserved, 0, 10);
+                entries[i].time = 0;
+                entries[i].date = 0;
+                disk_write_sector(fs.root_start + s, sector_buf);
+
+                /* Initialize the directory cluster with "." and ".." */
+                memset(sector_buf, 0, 512);
+                fat16_dirent_t *dir = (fat16_dirent_t *)sector_buf;
+
+                /* "." entry */
+                memset(dir[0].name, ' ', 11);
+                dir[0].name[0] = '.';
+                dir[0].attr = ATTR_DIRECTORY;
+                dir[0].first_cluster = cluster;
+                dir[0].file_size = 0;
+
+                /* ".." entry */
+                memset(dir[1].name, ' ', 11);
+                dir[1].name[0] = '.';
+                dir[1].name[1] = '.';
+                dir[1].attr = ATTR_DIRECTORY;
+                dir[1].first_cluster = 0;  /* parent = root */
+                dir[1].file_size = 0;
+
+                uint32_t dir_sector = cluster_to_sector(cluster);
+                disk_write_sector(dir_sector, sector_buf);
+
+                /* Zero out remaining sectors in cluster */
+                memset(sector_buf, 0, 512);
+                for (int k = 1; k < fs.sectors_per_cluster; k++)
+                    disk_write_sector(dir_sector + k, sector_buf);
+
+                return 0;
+            }
+        }
+    }
+    /* Root dir full — free the allocated cluster */
+    fat_write(cluster, 0x0000);
+    return -1;
 }
 
 int fs_unlink(const char *path)
 {
-    (void)path;
-    return -1;  /* not implemented yet */
+    if (!fs.mounted) return -1;
+
+    uint16_t parent;
+    char name[FS_MAX_NAME];
+    resolve_path(path, &parent, name);
+    if (name[0] == '\0') return -1;
+
+    uint32_t sec;
+    int idx;
+    if (find_root_entry_loc(name, &sec, &idx) != 0)
+        return -1;
+
+    /* Read the sector containing the entry */
+    if (disk_read_sector(sec, sector_buf) != 0)
+        return -1;
+
+    fat16_dirent_t *entries = (fat16_dirent_t *)sector_buf;
+    uint16_t first_cluster = entries[idx].first_cluster;
+
+    /* Mark entry as deleted */
+    entries[idx].name[0] = (char)0xE5;
+    disk_write_sector(sec, sector_buf);
+
+    /* Free cluster chain */
+    if (first_cluster >= 2)
+        fat_free_chain(first_cluster);
+
+    return 0;
+}
+
+int fs_rename(const char *old_path, const char *new_path)
+{
+    if (!fs.mounted) return -1;
+
+    uint16_t parent;
+    char old_name[FS_MAX_NAME], new_name[FS_MAX_NAME];
+    resolve_path(old_path, &parent, old_name);
+    resolve_path(new_path, &parent, new_name);
+    if (old_name[0] == '\0' || new_name[0] == '\0') return -1;
+
+    /* Check new name doesn't already exist */
+    fat16_dirent_t existing;
+    if (find_root_entry(new_name, &existing) == 0)
+        return -1;  /* target exists */
+
+    /* Find old entry */
+    uint32_t sec;
+    int idx;
+    if (find_root_entry_loc(old_name, &sec, &idx) != 0)
+        return -1;
+
+    /* Read sector, change name, write back */
+    if (disk_read_sector(sec, sector_buf) != 0)
+        return -1;
+
+    fat16_dirent_t *entries = (fat16_dirent_t *)sector_buf;
+    string_to_fat_name(new_name, entries[idx].name);
+    disk_write_sector(sec, sector_buf);
+
+    return 0;
 }

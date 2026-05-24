@@ -38,5 +38,6 @@ int  fs_stat(const char *path, void *stat_out);
 int  fs_readdir(int fd, void *entry_out);
 int  fs_mkdir(const char *path);
 int  fs_unlink(const char *path);
+int  fs_rename(const char *old_path, const char *new_path);
 
 #endif

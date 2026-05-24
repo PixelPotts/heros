@@ -69,6 +69,7 @@ int input_driver_poll(void *event_out)
         uint32_t y   = INPUT_MOUSE_Y;
         uint32_t btn = INPUT_MOUSE_BTN;
         uint32_t ms  = INPUT_MOUSE_STATE;
+        uint32_t mod = INPUT_KBD_MOD;  /* mod state available for mouse events too */
         INPUT_MOUSE_ACK = 1;
 
         if (ms == 1)      evt->type = INPUT_EVT_MOUSE_DOWN;
@@ -76,7 +77,7 @@ int input_driver_poll(void *event_out)
         else              evt->type = INPUT_EVT_MOUSE_MOVE;
 
         evt->key = 0;
-        evt->mod = 0;
+        evt->mod = (uint16_t)mod;
         evt->ch = 0;
         evt->mouse_x = (int16_t)x;
         evt->mouse_y = (int16_t)y;
