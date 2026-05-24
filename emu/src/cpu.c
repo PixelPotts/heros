@@ -159,6 +159,7 @@ void cpu_init(cpu_t *cpu, uint32_t entry)
     cpu->mscratch = 0;
     cpu->insn_count = 0;
     cpu->halted   = false;
+    cpu->ram_ptr  = bus_get_ram();
 }
 
 /* ── Execute one instruction ────────────────────────────────────── */
@@ -168,7 +169,7 @@ void cpu_step(cpu_t *cpu)
     if (cpu->halted) return;
 
     bus_result_t br;
-    uint32_t insn = bus_read32(cpu->pc, &br);
+    uint32_t insn = bus_fetch32(cpu->pc, cpu->ram_ptr, &br);
     if (br.exception) {
         trap(cpu, CAUSE_LOAD_FAULT, cpu->pc);
         return;

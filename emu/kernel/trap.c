@@ -30,10 +30,10 @@ void trap_dispatch(trap_frame_t *frame)
         /* ── Exception ─────────────────────────────────────────── */
         switch (mcause) {
         case CAUSE_ECALL_M:
-            /* System call */
-            syscall_dispatch(frame);
-            /* Advance past ecall instruction */
+            /* Advance past ecall BEFORE dispatch — sched_tick may
+               swap the frame to a different task's saved state */
             frame->mepc += 4;
+            syscall_dispatch(frame);
             break;
 
         case CAUSE_ILLEGAL_INSN: {

@@ -24,36 +24,13 @@ extern AppContent *filemanager_create(void);
 extern AppContent *settings_create(void);
 extern AppContent *taskmanager_create(void);
 
-/* ── Geometric background pattern ────────────────────────────── */
+/* ── Background ─────────────────────────────────────────────── */
 static void render_background(void)
 {
     const ThemeColors *tc = theme_colors();
 
-    /* Vertical gradient */
-    draw_gradient_v(RECT(0, 0, SCREEN_W, SCREEN_H), tc->bg_top, tc->bg_bottom);
-
-    /* Subtle geometric overlay */
-    uint32_t t = hal_get_ticks() / 100;
-
-    /* Floating circles */
-    for (int i = 0; i < 6; i++) {
-        int cx = 200 + i * 180 + hal_sin256((int)(t + i * 40)) * 30 / 256;
-        int cy = 200 + hal_cos256((int)(t * 2 + i * 60)) * 50 / 256;
-        int r = 40 + i * 10;
-        Color c = tc->accent;
-        c.a = 8 + i * 2;
-        draw_filled_circle_blend(cx, cy, r, c);
-    }
-
-    /* Grid lines */
-    Color grid = tc->panel_border;
-    grid.a = 15;
-    for (int x = 0; x < SCREEN_W; x += 80)
-        for (int y = 0; y < SCREEN_H; y += 2)
-            hal_fb_pixel_blend(x, y, grid);
-    for (int y = 0; y < SCREEN_H; y += 80)
-        for (int x = 0; x < SCREEN_W; x += 2)
-            hal_fb_pixel_blend(x, y, grid);
+    /* Simple solid fill — gradient is too expensive for emulated CPU */
+    draw_filled_rect(RECT(0, 0, SCREEN_W, SCREEN_H), tc->bg_top);
 }
 
 /* ── Desktop main loop ───────────────────────────────────────── */
@@ -155,12 +132,12 @@ void desktop_main(void)
 
         /* ── Render ──────────────────────────────────────────── */
 
-        /* Background */
-        render_background();
-
         if (lockscreen_is_locked()) {
+            /* Lock screen covers everything — skip background */
             lockscreen_render();
         } else {
+            /* Background */
+            render_background();
             /* Sidebars */
             sidebar_left_render(mx, my);
             sidebar_right_render();

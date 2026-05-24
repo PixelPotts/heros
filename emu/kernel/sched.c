@@ -1,4 +1,5 @@
 #include "sched.h"
+#include "syscall.h"
 #include "mm.h"
 #include "timer.h"
 #include "string.h"
@@ -8,9 +9,6 @@ static task_t    tasks[MAX_TASKS];
 static int       current_task = -1;
 static int       task_count = 0;
 static int       sched_enabled = 0;
-
-/* Saved trap frame pointer for the current task during context switch */
-static trap_frame_t *current_frame __attribute__((unused)) = (void *)0;
 
 void sched_init(void)
 {
@@ -22,8 +20,8 @@ void sched_init(void)
     /* Task 0 is the kernel/idle task (already running) */
     tasks[0].state = TASK_RUNNING;
     tasks[0].id = 0;
-    tasks[0].sp = 0;  /* uses boot stack */
     tasks[0].stack_base = 0;
+    tasks[0].entry = (void *)0;
     strncpy(tasks[0].name, "idle", sizeof(tasks[0].name));
     current_task = 0;
     task_count = 1;
@@ -34,10 +32,12 @@ void sched_init(void)
 /* Task wrapper — calls entry, then exits */
 static void task_wrapper(void)
 {
-    /* The entry function pointer is stored in s0 of the initial frame */
-    void (*entry)(void);
-    __asm__ volatile("mv %0, s0" : "=r"(entry));
-    entry();
+    /* Get entry point from the task struct (safe from compiler prologue) */
+    int id = sched_current_id();
+    kprintf("[sched] task_wrapper: starting task %d ('%s')\n", id, tasks[id].name);
+    void (*entry)(void) = tasks[id].entry;
+    if (entry)
+        entry();
     sched_exit();
 }
 
@@ -65,18 +65,14 @@ int sched_create_task(const char *name, void (*entry)(void))
 
     uint32_t stack_top = (uint32_t)(uintptr_t)stack + TASK_STACK_SIZE;
 
-    /* Build initial trap frame on the stack */
-    stack_top -= sizeof(trap_frame_t);
-    trap_frame_t *frame = (trap_frame_t *)stack_top;
-    memset(frame, 0, sizeof(trap_frame_t));
+    /* Build initial saved frame */
+    memset(&tasks[id].saved_frame, 0, sizeof(trap_frame_t));
+    tasks[id].saved_frame.mepc = (uint32_t)(uintptr_t)task_wrapper;
+    tasks[id].saved_frame.sp = stack_top;
+    tasks[id].saved_frame.ra = (uint32_t)(uintptr_t)sched_exit;
 
-    frame->mepc = (uint32_t)(uintptr_t)task_wrapper;
-    frame->sp = stack_top;
-    frame->s0 = (uint32_t)(uintptr_t)entry;  /* pass entry via s0 */
-    frame->ra = (uint32_t)(uintptr_t)sched_exit;
-
-    tasks[id].sp = stack_top;
     tasks[id].stack_base = (uint32_t)(uintptr_t)stack;
+    tasks[id].entry = entry;
     tasks[id].state = TASK_READY;
     tasks[id].id = id;
     tasks[id].wake_time = 0;
@@ -98,53 +94,82 @@ static int find_next_task(void)
         }
     }
 
-    /* Round-robin from current+1 */
+    /* Round-robin from current+1, skip idle task (0) */
     for (int i = 1; i <= MAX_TASKS; i++) {
         int idx = (current_task + i) % MAX_TASKS;
+        if (idx == 0) continue;  /* prefer real tasks over idle */
         if (tasks[idx].state == TASK_READY)
             return idx;
     }
-    return 0;  /* idle task */
+    return 0;  /* only idle task available */
 }
+
+static int tick_debug_count = 0;
 
 void sched_tick(trap_frame_t *frame)
 {
     if (!sched_enabled) return;
 
-    /* Save current task's frame */
-    if (current_task >= 0 && tasks[current_task].state == TASK_RUNNING) {
-        tasks[current_task].sp = (uint32_t)(uintptr_t)frame;
-        tasks[current_task].state = TASK_READY;
+    int old = current_task;
+
+    /* Always save current task's frame */
+    if (current_task >= 0) {
+        memcpy(&tasks[current_task].saved_frame, frame, sizeof(trap_frame_t));
+        /* Only transition RUNNING → READY; leave SLEEPING/BLOCKED/DEAD as-is */
+        if (tasks[current_task].state == TASK_RUNNING) {
+            tasks[current_task].state = TASK_READY;
+        }
     }
 
     /* Find next task */
     int next = find_next_task();
+    current_task = next;
+    tasks[current_task].state = TASK_RUNNING;
 
-    if (next != current_task) {
-        current_task = next;
-        tasks[current_task].state = TASK_RUNNING;
-
-        /* Switch to next task's trap frame by updating the frame in place */
-        trap_frame_t *next_frame = (trap_frame_t *)(uintptr_t)tasks[current_task].sp;
-
-        /* Copy next task's saved frame into the trap frame location */
-        memcpy(frame, next_frame, sizeof(trap_frame_t));
-
-        /* Update mscratch to point to new task's stack */
-        uint32_t new_scratch = tasks[current_task].sp;
-        __asm__ volatile("csrw mscratch, %0" :: "r"(new_scratch));
-    } else {
-        tasks[current_task].state = TASK_RUNNING;
+    if (tick_debug_count < 30) {
+        kprintf("[tick] %d(mepc=%x,sp=%x)→%d(mepc=%x,sp=%x)\n",
+                old, (unsigned)tasks[old].saved_frame.mepc,
+                (unsigned)tasks[old].saved_frame.sp,
+                next, (unsigned)tasks[next].saved_frame.mepc,
+                (unsigned)tasks[next].saved_frame.sp);
+        tick_debug_count++;
     }
+
+    /* Restore next task's frame into the trap frame buffer */
+    memcpy(frame, &tasks[current_task].saved_frame, sizeof(trap_frame_t));
 }
 
 void sched_yield(void)
 {
-    /* Trigger ecall — trap handler will call sched_tick */
-    __asm__ volatile("ecall");
+    /* Properly set a7 = SYS_YIELD before ecall */
+    register uint32_t a7 __asm__("a7") = SYS_YIELD;
+    __asm__ volatile("ecall" :: "r"(a7));
 }
 
 void sched_exit(void)
+{
+    register uint32_t a7 __asm__("a7") = 1; /* SYS_EXIT */
+    __asm__ volatile("ecall" :: "r"(a7));
+    while (1) __asm__ volatile("wfi");
+}
+
+void sched_sleep_ms(uint32_t ms)
+{
+    if (current_task <= 0) return;  /* don't sleep idle task */
+    register uint32_t a0 __asm__("a0") = ms;
+    register uint32_t a7 __asm__("a7") = 4; /* SYS_SLEEP_MS */
+    __asm__ volatile("ecall" :: "r"(a0), "r"(a7));
+}
+
+/* Internal: called from syscall handler (already in trap context) */
+void sched_do_sleep(uint32_t ms)
+{
+    if (current_task <= 0) return;
+    tasks[current_task].state = TASK_SLEEPING;
+    tasks[current_task].wake_time = timer_uptime_ms() + ms;
+}
+
+void sched_do_exit(void)
 {
     if (current_task > 0) {
         tasks[current_task].state = TASK_DEAD;
@@ -152,16 +177,6 @@ void sched_exit(void)
         kprintf("[sched] Task %d ('%s') exited\n",
                 current_task, tasks[current_task].name);
     }
-    /* Yield to let scheduler pick next task */
-    while (1) sched_yield();
-}
-
-void sched_sleep_ms(uint32_t ms)
-{
-    if (current_task <= 0) return;  /* don't sleep idle task */
-    tasks[current_task].state = TASK_SLEEPING;
-    tasks[current_task].wake_time = timer_uptime_ms() + ms;
-    sched_yield();
 }
 
 void sched_block(void)

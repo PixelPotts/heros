@@ -13,4 +13,9 @@ void     fb_refresh(void);                /* push pixels to SDL */
 bool     fb_is_dirty(void);
 void     fb_cleanup(void);
 
+/* GPU 2D accelerator */
+uint32_t gpu_read(uint32_t offset);
+void     gpu_write(uint32_t offset, uint32_t val);
+uint8_t *fb_get_pixels(void);             /* host pixel buffer */
+
 #endif

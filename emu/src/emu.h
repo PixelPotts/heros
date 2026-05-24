@@ -48,10 +48,31 @@
 
 #define DISK_SECTOR_SIZE 512
 
+/* ── GPU MMIO (2D accelerator) ─────────────────────────────────── */
+#define GPU_BASE        0x21100000
+#define GPU_SIZE        0x00000040
+
+/* GPU register offsets */
+#define GPU_CMD         0x00   /* write to execute command */
+#define GPU_X           0x04   /* rect x */
+#define GPU_Y           0x08   /* rect y */
+#define GPU_W           0x0C   /* rect w */
+#define GPU_H           0x10   /* rect h */
+#define GPU_COLOR       0x14   /* packed RGBA */
+#define GPU_SRC_ADDR    0x18   /* source RAM address (for blit) */
+#define GPU_DST_ADDR    0x1C   /* dest RAM address (for blit) */
+#define GPU_STRIDE      0x20   /* bytes per row (for blit) */
+
+/* GPU commands */
+#define GPU_CMD_FILL    1      /* fill rect in backbuffer */
+#define GPU_CMD_COPY    2      /* memcpy src→dst, length = W */
+#define GPU_CMD_FILL_BUF 3    /* fill rect in RAM buffer */
+
 /* ── Framebuffer control offsets ────────────────────────────────── */
 #define FB_CTRL_WIDTH   0x00
 #define FB_CTRL_HEIGHT  0x04
 #define FB_CTRL_FLUSH   0x08
+#define FB_CTRL_DMA_SRC 0x0C        /* write RAM addr → DMA blit + refresh */
 
 /* ── CSR addresses ──────────────────────────────────────────────── */
 #define CSR_MSTATUS     0x300

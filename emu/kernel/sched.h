@@ -17,20 +17,25 @@ typedef enum {
 } task_state_t;
 
 typedef struct {
-    uint32_t      sp;            /* saved stack pointer */
-    uint32_t      stack_base;    /* bottom of stack allocation */
+    trap_frame_t  saved_frame;    /* per-task saved register state */
+    uint32_t      stack_base;     /* bottom of stack allocation */
     task_state_t  state;
-    uint32_t      wake_time;     /* for sleep_ms */
+    uint32_t      wake_time;      /* for sleep_ms */
+    void        (*entry)(void);   /* task entry point */
     char          name[32];
     int           id;
 } task_t;
 
 void    sched_init(void);
 int     sched_create_task(const char *name, void (*entry)(void));
-void    sched_tick(trap_frame_t *frame);  /* called from timer interrupt */
+void    sched_tick(trap_frame_t *frame);  /* called from timer/ecall */
 void    sched_yield(void);
 void    sched_exit(void);
 void    sched_sleep_ms(uint32_t ms);
+
+/* Internal: set state without ecall (called from syscall handler) */
+void    sched_do_sleep(uint32_t ms);
+void    sched_do_exit(void);
 void    sched_block(void);
 void    sched_unblock(int task_id);
 

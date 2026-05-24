@@ -5,6 +5,7 @@
 #include "input.h"
 #include "fb.h"
 #include <stdio.h>
+#include <string.h>
 
 static uint8_t *ram;
 static size_t   ram_size;
@@ -13,6 +14,11 @@ void bus_init(uint8_t *r, size_t sz)
 {
     ram      = r;
     ram_size = sz;
+}
+
+uint8_t *bus_get_ram(void)
+{
+    return ram;
 }
 
 /* ── helpers ────────────────────────────────────────────────────── */
@@ -50,8 +56,9 @@ uint16_t bus_read16(uint32_t addr, bus_result_t *res)
     res->fault_addr = 0;
 
     if (in_range(addr, RAM_BASE, RAM_SIZE) && addr + 1 < RAM_BASE + RAM_SIZE) {
-        uint32_t off = addr - RAM_BASE;
-        return (uint16_t)ram[off] | ((uint16_t)ram[off + 1] << 8);
+        uint16_t val;
+        memcpy(&val, ram + (addr - RAM_BASE), 2);
+        return val;
     }
 
     /* Fall back to two byte reads */
@@ -68,11 +75,9 @@ uint32_t bus_read32(uint32_t addr, bus_result_t *res)
     res->fault_addr = 0;
 
     if (in_range(addr, RAM_BASE, RAM_SIZE) && addr + 3 < RAM_BASE + RAM_SIZE) {
-        uint32_t off = addr - RAM_BASE;
-        return (uint32_t)ram[off]
-             | ((uint32_t)ram[off + 1] << 8)
-             | ((uint32_t)ram[off + 2] << 16)
-             | ((uint32_t)ram[off + 3] << 24);
+        uint32_t val;
+        memcpy(&val, ram + (addr - RAM_BASE), 4);
+        return val;  /* host is little-endian like RISC-V */
     }
 
     if (in_range(addr, CLINT_BASE, CLINT_SIZE))
@@ -89,6 +94,9 @@ uint32_t bus_read32(uint32_t addr, bus_result_t *res)
 
     if (in_range(addr, FB_CTRL_BASE, FB_CTRL_SIZE))
         return fb_ctrl_read(addr - FB_CTRL_BASE);
+
+    if (in_range(addr, GPU_BASE, GPU_SIZE))
+        return gpu_read(addr - GPU_BASE);
 
     if (in_range(addr, FB_BASE, FB_SIZE)) {
         /* 32-bit read from framebuffer — assemble from bytes */
@@ -136,9 +144,7 @@ void bus_write16(uint32_t addr, uint16_t val, bus_result_t *res)
     res->fault_addr = 0;
 
     if (in_range(addr, RAM_BASE, RAM_SIZE) && addr + 1 < RAM_BASE + RAM_SIZE) {
-        uint32_t off = addr - RAM_BASE;
-        ram[off]     = (uint8_t)(val);
-        ram[off + 1] = (uint8_t)(val >> 8);
+        memcpy(ram + (addr - RAM_BASE), &val, 2);
         return;
     }
 
@@ -154,11 +160,7 @@ void bus_write32(uint32_t addr, uint32_t val, bus_result_t *res)
     res->fault_addr = 0;
 
     if (in_range(addr, RAM_BASE, RAM_SIZE) && addr + 3 < RAM_BASE + RAM_SIZE) {
-        uint32_t off = addr - RAM_BASE;
-        ram[off]     = (uint8_t)(val);
-        ram[off + 1] = (uint8_t)(val >> 8);
-        ram[off + 2] = (uint8_t)(val >> 16);
-        ram[off + 3] = (uint8_t)(val >> 24);
+        memcpy(ram + (addr - RAM_BASE), &val, 4);  /* host is little-endian */
         return;
     }
 
@@ -184,6 +186,11 @@ void bus_write32(uint32_t addr, uint32_t val, bus_result_t *res)
 
     if (in_range(addr, FB_CTRL_BASE, FB_CTRL_SIZE)) {
         fb_ctrl_write(addr - FB_CTRL_BASE, val);
+        return;
+    }
+
+    if (in_range(addr, GPU_BASE, GPU_SIZE)) {
+        gpu_write(addr - GPU_BASE, val);
         return;
     }
 

@@ -18,10 +18,6 @@ _start:
     la   t0, _trap_entry
     csrw mtvec, t0
 
-    /* ── Set mscratch to point to a scratch area for trap frame ─ */
-    la   t0, _trap_scratch
-    csrw mscratch, t0
-
     /* ── Jump to C entry point ─────────────────────────────────── */
     call kmain
 
@@ -30,17 +26,19 @@ _start:
     j    3b
 
 /* ═══════════════════════════════════════════════════════════════════
-   Trap entry — saves all 31 GPRs via mscratch swap pattern
+   Trap entry — saves all 31 GPRs onto the current task's stack.
+   No mscratch needed; the trap frame lives on the task's own stack,
+   so the C handler has a full stack for function calls.
    ═══════════════════════════════════════════════════════════════════ */
 .align 4
 .global _trap_entry
 _trap_entry:
-    /* Swap sp with mscratch (mscratch holds trap frame pointer) */
-    csrrw sp, mscratch, sp
+    /* Push trap frame (128 bytes: 31 regs + mepc) */
+    addi sp, sp, -128
 
-    /* Save all 31 general-purpose registers into trap frame */
+    /* Save all general-purpose registers */
     sw   x1,   0(sp)     /* ra */
-    /* x2 (sp) was swapped into mscratch — save it below */
+    /* x2 (sp) saved below — need to compute original sp */
     sw   x3,   8(sp)     /* gp */
     sw   x4,  12(sp)     /* tp */
     sw   x5,  16(sp)     /* t0 */
@@ -71,8 +69,8 @@ _trap_entry:
     sw   x30, 116(sp)    /* t5 */
     sw   x31, 120(sp)    /* t6 */
 
-    /* Save the original sp (now in mscratch) */
-    csrr t0, mscratch
+    /* Save original sp (before our addi) */
+    addi t0, sp, 128
     sw   t0,  4(sp)      /* x2 = sp */
 
     /* Save mepc */
@@ -83,15 +81,15 @@ _trap_entry:
     mv   a0, sp
     call trap_dispatch
 
-    /* Restore mepc (trap handler may have modified it) */
+    /* ── Trap exit ─────────────────────────────────────────────── */
+    /* sched_tick may have overwritten the frame with a different
+       task's saved state. Restore whatever is in the frame now. */
+
+    /* Restore mepc (may have been modified) */
     lw   t0, 124(sp)
     csrw mepc, t0
 
-    /* Restore original sp into mscratch for next trap */
-    lw   t0,  4(sp)
-    csrw mscratch, t0
-
-    /* Restore all GPRs */
+    /* Restore all GPRs except sp */
     lw   x1,   0(sp)
     /* x2 (sp) restored last */
     lw   x3,   8(sp)
@@ -124,14 +122,7 @@ _trap_entry:
     lw   x30, 116(sp)
     lw   x31, 120(sp)
 
-    /* Restore sp from mscratch */
-    csrrw sp, mscratch, sp
+    /* Restore sp last (pops the trap frame) */
+    lw   sp,  4(sp)
 
     mret
-
-/* ── Trap scratch area (128 bytes for 31 regs + mepc) ──────────── */
-.section .bss
-.align 4
-.global _trap_scratch
-_trap_scratch:
-    .space 128

@@ -24,11 +24,13 @@ void syscall_dispatch(trap_frame_t *frame)
 
     switch (num) {
     case SYS_YIELD:
-        /* handled by returning and letting scheduler run */
+        /* Context switch to next runnable task */
+        sched_tick(frame);
         break;
 
     case SYS_EXIT:
-        sched_exit();
+        sched_do_exit();
+        sched_tick(frame);
         break;
 
     case SYS_WRITE: {
@@ -61,7 +63,8 @@ void syscall_dispatch(trap_frame_t *frame)
     }
 
     case SYS_SLEEP_MS:
-        sched_sleep_ms(frame->a0);
+        sched_do_sleep(frame->a0);
+        sched_tick(frame);
         break;
 
     case SYS_GETTIME:

@@ -15,9 +15,10 @@
 #include "input.h"
 #include "fb.h"
 
-#define BATCH_SIZE     10000       /* instructions per SDL poll */
-#define CLINT_DIVISOR  100         /* mtime ticks per instruction */
-#define FB_REFRESH_MS  33          /* ~30 fps */
+#define BATCH_SIZE      2000000     /* instructions per SDL poll */
+#define CLINT_DIVISOR   1           /* mtime ticks per instruction */
+#define IRQ_CHECK_INTERVAL 1024     /* check interrupts every N insns */
+#define FB_REFRESH_MS   33          /* ~30 fps */
 
 static struct termios orig_termios;
 static bool           termios_saved = false;
@@ -132,17 +133,23 @@ int main(int argc, char **argv)
         for (int i = 0; i < BATCH_SIZE && !cpu.halted; i++) {
             cpu_step(&cpu);
 
-            /* Tick the timer every instruction */
-            clint_tick(CLINT_DIVISOR);
+            /* Check timer & interrupts periodically (not every insn) */
+            if ((i & (IRQ_CHECK_INTERVAL - 1)) == 0) {
+                clint_tick(IRQ_CHECK_INTERVAL * CLINT_DIVISOR);
 
-            /* Update mip from CLINT state */
-            if (clint_timer_pending())
-                cpu.mip |= MIP_MTIP;
-            if (clint_software_pending())
-                cpu.mip |= MIP_MSIP;
+                /* Update mip from CLINT state (set AND clear) */
+                if (clint_timer_pending())
+                    cpu.mip |= MIP_MTIP;
+                else
+                    cpu.mip &= ~MIP_MTIP;
+                if (clint_software_pending())
+                    cpu.mip |= MIP_MSIP;
+                else
+                    cpu.mip &= ~MIP_MSIP;
 
-            /* Check for pending interrupts */
-            cpu_check_interrupts(&cpu);
+                /* Check for pending interrupts */
+                cpu_check_interrupts(&cpu);
+            }
         }
 
         /* ── Poll SDL events ────────────────────────────────────── */

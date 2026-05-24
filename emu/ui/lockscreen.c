@@ -28,9 +28,9 @@ void lockscreen_render(void)
 
     const ThemeColors *tc = theme_colors();
 
-    /* Dark overlay */
-    draw_filled_rect_blend(RECT(0, 0, SCREEN_W, SCREEN_H),
-                           COLOR(0, 0, 0, 200));
+    /* Dark overlay — solid fill (blend is too expensive for emulated CPU) */
+    draw_filled_rect(RECT(0, 0, SCREEN_W, SCREEN_H),
+                     COLOR(10, 10, 20, 255));
 
     /* Clock */
     char time_str[16];

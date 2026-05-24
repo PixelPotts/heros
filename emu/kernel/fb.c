@@ -6,6 +6,7 @@
 /* Framebuffer MMIO addresses */
 #define FB_MMIO_BASE    0x20000000
 #define FB_CTRL_FLUSH   (*(volatile uint32_t *)0x21000008)
+#define FB_CTRL_DMA_SRC (*(volatile uint32_t *)0x2100000C)
 
 /* Back buffer in RAM (allocated via page_alloc) */
 static uint8_t *backbuffer;
@@ -28,16 +29,9 @@ void fb_driver_flush(void)
 {
     if (!backbuffer) return;
 
-    /* Copy backbuffer to MMIO framebuffer */
-    volatile uint32_t *dst = (volatile uint32_t *)FB_MMIO_BASE;
-    const uint32_t *src = (const uint32_t *)backbuffer;
-    uint32_t count = FB_SIZE / 4;
-
-    for (uint32_t i = 0; i < count; i++)
-        dst[i] = src[i];
-
-    /* Signal the emulator to refresh */
-    FB_CTRL_FLUSH = 1;
+    /* DMA blit: write backbuffer RAM address to control register.
+     * The emulator copies FB_SIZE bytes from RAM and refreshes. */
+    FB_CTRL_DMA_SRC = (uint32_t)(uintptr_t)backbuffer;
 }
 
 uint8_t *fb_get_backbuffer(void)

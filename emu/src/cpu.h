@@ -19,6 +19,9 @@ typedef struct {
 
     uint64_t insn_count;
     bool     halted;
+
+    /* Cached RAM pointer for fast fetch (set during init) */
+    uint8_t *ram_ptr;
 } cpu_t;
 
 void cpu_init(cpu_t *cpu, uint32_t entry);
