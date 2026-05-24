@@ -10,9 +10,9 @@
 #define CLINT_MTIME_HI    (*(volatile uint32_t *)0x0200BFFC)
 
 #define FB_BASE         ((volatile uint8_t *)0x20000000)
-#define FB_CTRL_FLUSH   (*(volatile uint32_t *)0x20200008)
-#define FB_WIDTH        800
-#define FB_HEIGHT       600
+#define FB_CTRL_FLUSH   (*(volatile uint32_t *)0x21000008)
+#define FB_WIDTH        2560
+#define FB_HEIGHT       1440
 
 /* ── UART ───────────────────────────────────────────────────────── */
 static void uart_putchar(char c)
@@ -154,19 +154,19 @@ void kernel_main(void)
     uart_puts("[kernel] Drawing framebuffer...\n");
     fb_fill_rect(0, 0, FB_WIDTH, FB_HEIGHT, 20, 20, 60);
 
-    /* Draw colored rectangles */
-    fb_fill_rect(100, 100, 200, 150, 255, 50, 50);   /* red */
-    fb_fill_rect(350, 100, 200, 150, 50, 255, 50);   /* green */
-    fb_fill_rect(225, 300, 200, 150, 50, 100, 255);   /* blue */
+    /* Draw colored rectangles (scaled for 2560x1440) */
+    fb_fill_rect(320, 240, 640, 360, 255, 50, 50);    /* red */
+    fb_fill_rect(1120, 240, 640, 360, 50, 255, 50);   /* green */
+    fb_fill_rect(720, 720, 640, 360, 50, 100, 255);   /* blue */
 
     /* Draw a white border */
-    for (int x = 50; x < 750; x++) {
-        fb_set_pixel(x, 50, 255, 255, 255);
-        fb_set_pixel(x, 500, 255, 255, 255);
+    for (int x = 160; x < 2400; x++) {
+        fb_set_pixel(x, 120, 255, 255, 255);
+        fb_set_pixel(x, 1200, 255, 255, 255);
     }
-    for (int y = 50; y < 500; y++) {
-        fb_set_pixel(50, y, 255, 255, 255);
-        fb_set_pixel(749, y, 255, 255, 255);
+    for (int y = 120; y < 1200; y++) {
+        fb_set_pixel(160, y, 255, 255, 255);
+        fb_set_pixel(2399, y, 255, 255, 255);
     }
 
     /* Flush framebuffer */

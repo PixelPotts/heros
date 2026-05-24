@@ -19,12 +19,12 @@
 #define DISK_SIZE       0x00000020
 
 #define FB_BASE         0x20000000
-#define FB_WIDTH        800
-#define FB_HEIGHT       600
+#define FB_WIDTH        2560
+#define FB_HEIGHT       1440
 #define FB_BPP          4                   /* RGBA */
-#define FB_SIZE         (FB_WIDTH * FB_HEIGHT * FB_BPP)  /* 1,920,000 */
+#define FB_SIZE         (FB_WIDTH * FB_HEIGHT * FB_BPP)  /* 14,745,600 */
 
-#define FB_CTRL_BASE    0x20200000
+#define FB_CTRL_BASE    0x21000000          /* after 16 MB framebuffer region */
 #define FB_CTRL_SIZE    0x00000010
 
 #define RAM_BASE        0x80000000
