@@ -47,7 +47,8 @@ HAL_SRC = hal/hal_fb.c \
           hal/hal_input.c \
           hal/hal_time.c \
           hal/hal_mem.c \
-          hal/hal_fs.c
+          hal/hal_fs.c \
+          hal/font_data.c
 
 # ─── UI sources ─────────────────────────────────────────────────
 UI_SRC  = ui/theme.c \
