@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HerOS File Explorer - Interactive Wireframe</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1e1e2e; color: #cdd6f4; overflow: hidden; height: 100vh; display: flex; flex-direction: column; user-select: none; }
+
+  /* ── Toolbar ── */
+  .toolbar { display: flex; align-items: center; gap: 4px; padding: 6px 10px; background: #181825; border-bottom: 1px solid #313244; flex-shrink: 0; }
+  .toolbar .btn { padding: 5px 10px; background: #313244; border: 1px solid #45475a; border-radius: 4px; color: #cdd6f4; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+  .toolbar .btn:hover { background: #45475a; }
+  .toolbar .btn:active { background: #585b70; }
+  .toolbar .btn.disabled { opacity: 0.4; pointer-events: none; }
+  .toolbar .sep { width: 1px; height: 24px; background: #45475a; margin: 0 4px; }
+  .toolbar .spacer { flex: 1; }
+
+  /* ── Tab Bar ── */
+  .tab-bar { display: flex; background: #11111b; border-bottom: 1px solid #313244; flex-shrink: 0; }
+  .tab { padding: 7px 16px; font-size: 12px; cursor: pointer; border-right: 1px solid #313244; display: flex; align-items: center; gap: 8px; min-width: 120px; }
+  .tab.active { background: #1e1e2e; border-bottom: 2px solid #89b4fa; }
+  .tab:hover:not(.active) { background: #181825; }
+  .tab .close-tab { font-size: 14px; opacity: 0.5; margin-left: auto; }
+  .tab .close-tab:hover { opacity: 1; color: #f38ba8; }
+  .tab-new { padding: 7px 12px; cursor: pointer; font-size: 16px; color: #6c7086; }
+  .tab-new:hover { color: #cdd6f4; background: #181825; }
+
+  /* ── Address Bar ── */
+  .address-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: #181825; border-bottom: 1px solid #313244; flex-shrink: 0; }
+  .breadcrumb { display: flex; align-items: center; gap: 2px; flex: 1; background: #11111b; border: 1px solid #313244; border-radius: 4px; padding: 4px 8px; min-height: 30px; cursor: text; }
+  .breadcrumb .crumb { padding: 2px 6px; border-radius: 3px; cursor: pointer; font-size: 13px; }
+  .breadcrumb .crumb:hover { background: #313244; }
+  .breadcrumb .crumb.active { color: #89b4fa; }
+  .breadcrumb .sep { color: #585b70; font-size: 11px; }
+  .search-box { display: flex; align-items: center; background: #11111b; border: 1px solid #313244; border-radius: 4px; padding: 4px 8px; width: 220px; }
+  .search-box:focus-within { border-color: #89b4fa; }
+  .search-box input { background: none; border: none; color: #cdd6f4; outline: none; font-size: 13px; width: 100%; }
+  .search-box .icon { color: #6c7086; margin-right: 6px; font-size: 13px; }
+
+  /* ── Main Layout ── */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .sidebar { width: 220px; background: #181825; border-right: 1px solid #313244; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+  .sidebar-section { padding: 8px 0; }
+  .sidebar-section:not(:last-child) { border-bottom: 1px solid #313244; }
+  .sidebar-heading { padding: 4px 14px; font-size: 11px; text-transform: uppercase; color: #6c7086; letter-spacing: 0.5px; }
+  .sidebar-item { padding: 5px 14px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .sidebar-item:hover { background: #313244; }
+  .sidebar-item.active { background: #313244; color: #89b4fa; }
+  .sidebar-item .icon { width: 18px; text-align: center; }
+  .sidebar-item .badge { margin-left: auto; background: #45475a; padding: 1px 6px; border-radius: 8px; font-size: 10px; }
+
+  /* ── Tree View in Sidebar ── */
+  .tree-item { padding: 4px 14px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .tree-item:hover { background: #313244; }
+  .tree-item .arrow { width: 14px; text-align: center; font-size: 10px; color: #6c7086; }
+  .tree-item .arrow.open { transform: rotate(90deg); }
+  .tree-children { padding-left: 16px; }
+  .tree-children.collapsed { display: none; }
+
+  /* ── Content Area ── */
+  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .file-list-header { display: flex; padding: 6px 16px; background: #181825; border-bottom: 1px solid #313244; font-size: 12px; color: #6c7086; flex-shrink: 0; }
+  .file-list-header .col { cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .file-list-header .col:hover { color: #cdd6f4; }
+  .file-list-header .col-name { flex: 2; }
+  .file-list-header .col-size { width: 90px; text-align: right; }
+  .file-list-header .col-type { width: 120px; }
+  .file-list-header .col-modified { width: 150px; }
+  .file-list-header .col-perms { width: 80px; }
+
+  .file-list { flex: 1; overflow-y: auto; padding: 2px 0; }
+  .file-row { display: flex; align-items: center; padding: 4px 16px; font-size: 13px; cursor: pointer; border: 1px solid transparent; }
+  .file-row:hover { background: #313244; }
+  .file-row.selected { background: #313244; border-color: #89b4fa; }
+  .file-row.cut { opacity: 0.5; }
+  .file-row.dragging { opacity: 0.3; }
+  .file-row .col-name { flex: 2; display: flex; align-items: center; gap: 8px; }
+  .file-row .col-size { width: 90px; text-align: right; color: #a6adc8; }
+  .file-row .col-type { width: 120px; color: #a6adc8; }
+  .file-row .col-modified { width: 150px; color: #a6adc8; }
+  .file-row .col-perms { width: 80px; color: #a6adc8; font-family: monospace; font-size: 11px; }
+  .file-icon { font-size: 16px; width: 22px; text-align: center; }
+  .file-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-name.renaming { background: #11111b; border: 1px solid #89b4fa; padding: 1px 4px; border-radius: 2px; outline: none; color: #cdd6f4; }
+
+  /* Grid View */
+  .file-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; padding: 16px; align-content: start; }
+  .file-grid.hidden { display: none; }
+  .file-list.hidden { display: none; }
+  .file-list-header.hidden { display: none; }
+  .grid-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .grid-item:hover { background: #313244; }
+  .grid-item.selected { background: #313244; border-color: #89b4fa; }
+  .grid-item .grid-icon { font-size: 36px; }
+  .grid-item .grid-name { font-size: 11px; text-align: center; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── Preview Panel ── */
+  .preview-panel { width: 280px; background: #181825; border-left: 1px solid #313244; flex-shrink: 0; display: flex; flex-direction: column; overflow-y: auto; }
+  .preview-panel.hidden { display: none; }
+  .preview-icon { font-size: 64px; text-align: center; padding: 30px 0 16px; }
+  .preview-name { text-align: center; font-size: 14px; font-weight: 600; padding: 0 16px 4px; }
+  .preview-type { text-align: center; font-size: 12px; color: #6c7086; padding-bottom: 16px; }
+  .preview-section { padding: 10px 16px; border-top: 1px solid #313244; }
+  .preview-section h4 { font-size: 11px; text-transform: uppercase; color: #6c7086; margin-bottom: 8px; }
+  .preview-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+  .preview-row .label { color: #6c7086; }
+  .preview-tags { display: flex; gap: 4px; flex-wrap: wrap; padding: 4px 0; }
+  .preview-tag { background: #313244; padding: 2px 8px; border-radius: 10px; font-size: 11px; cursor: pointer; }
+  .preview-tag:hover { background: #45475a; }
+  .preview-tag.add { border: 1px dashed #45475a; background: none; }
+
+  /* ── Status Bar ── */
+  .status-bar { display: flex; align-items: center; padding: 4px 12px; background: #11111b; border-top: 1px solid #313244; font-size: 12px; color: #6c7086; flex-shrink: 0; gap: 16px; }
+  .status-bar .spacer { flex: 1; }
+  .status-bar .view-toggle { display: flex; gap: 2px; }
+  .status-bar .view-btn { padding: 2px 6px; cursor: pointer; border-radius: 3px; }
+  .status-bar .view-btn.active { background: #313244; color: #cdd6f4; }
+  .status-bar .view-btn:hover:not(.active) { background: #1e1e2e; }
+
+  /* ── Context Menu ── */
+  .context-menu { position: fixed; background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; padding: 4px 0; min-width: 220px; z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: none; }
+  .context-menu.show { display: block; }
+  .ctx-item { padding: 6px 16px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+  .ctx-item:hover { background: #313244; }
+  .ctx-item .shortcut { margin-left: auto; color: #6c7086; font-size: 11px; }
+  .ctx-item .icon { width: 18px; text-align: center; }
+  .ctx-item.danger { color: #f38ba8; }
+  .ctx-item.disabled { opacity: 0.4; pointer-events: none; }
+  .ctx-sep { height: 1px; background: #313244; margin: 4px 0; }
+  .ctx-submenu-arrow { margin-left: auto; font-size: 10px; color: #6c7086; }
+  .ctx-submenu { position: absolute; left: 100%; top: -4px; }
+
+  /* ── Dialogs / Modals ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+  .modal-overlay.hidden { display: none; }
+  .modal { background: #1e1e2e; border: 1px solid #45475a; border-radius: 10px; min-width: 420px; max-width: 550px; box-shadow: 0 16px 48px rgba(0,0,0,0.6); }
+  .modal-header { padding: 16px 20px 12px; border-bottom: 1px solid #313244; display: flex; align-items: center; }
+  .modal-header h3 { font-size: 15px; flex: 1; }
+  .modal-close { cursor: pointer; color: #6c7086; font-size: 18px; }
+  .modal-close:hover { color: #f38ba8; }
+  .modal-body { padding: 16px 20px; }
+  .modal-footer { padding: 12px 20px 16px; border-top: 1px solid #313244; display: flex; justify-content: flex-end; gap: 8px; }
+  .modal-btn { padding: 7px 18px; border-radius: 5px; border: 1px solid #45475a; background: #313244; color: #cdd6f4; cursor: pointer; font-size: 13px; }
+  .modal-btn:hover { background: #45475a; }
+  .modal-btn.primary { background: #89b4fa; color: #1e1e2e; border-color: #89b4fa; }
+  .modal-btn.primary:hover { background: #74c7ec; }
+  .modal-btn.danger { background: #f38ba8; color: #1e1e2e; border-color: #f38ba8; }
+  .modal-btn.danger:hover { background: #eba0ac; }
+  .modal-input { width: 100%; padding: 8px 10px; background: #11111b; border: 1px solid #45475a; border-radius: 4px; color: #cdd6f4; font-size: 13px; outline: none; margin-top: 8px; }
+  .modal-input:focus { border-color: #89b4fa; }
+  .modal-label { font-size: 13px; color: #a6adc8; }
+  .modal-text { font-size: 13px; color: #cdd6f4; line-height: 1.5; }
+
+  /* Properties dialog */
+  .props-grid { display: grid; grid-template-columns: 100px 1fr; gap: 6px 12px; font-size: 13px; }
+  .props-grid .label { color: #6c7086; }
+  .props-grid .value { color: #cdd6f4; }
+  .props-perms { margin-top: 12px; }
+  .props-perms table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  .props-perms th, .props-perms td { padding: 4px 8px; text-align: center; }
+  .props-perms th { color: #6c7086; font-weight: normal; }
+  .props-check { width: 16px; height: 16px; accent-color: #89b4fa; }
+
+  /* ── Toast Notifications ── */
+  .toast-container { position: fixed; bottom: 40px; right: 16px; z-index: 3000; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 10px 16px; font-size: 13px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.4); animation: slideIn 0.3s ease; min-width: 260px; }
+  .toast .progress { height: 3px; background: #89b4fa; border-radius: 2px; margin-top: 6px; }
+  .toast .undo-btn { color: #89b4fa; cursor: pointer; margin-left: auto; font-size: 12px; }
+  .toast .undo-btn:hover { text-decoration: underline; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ── Drag ghost ── */
+  .drag-ghost { position: fixed; background: #313244; border: 1px solid #89b4fa; border-radius: 4px; padding: 4px 10px; font-size: 12px; pointer-events: none; z-index: 5000; display: none; }
+  .drag-ghost .count { background: #89b4fa; color: #1e1e2e; border-radius: 10px; padding: 0 6px; margin-left: 6px; font-size: 11px; }
+
+  /* ── Selection Rectangle ── */
+  .select-rect { position: fixed; border: 1px solid #89b4fa; background: rgba(137,180,250,0.1); pointer-events: none; z-index: 900; display: none; }
+
+  /* ── Sort indicator ── */
+  .sort-arrow { font-size: 10px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: #11111b; }
+  ::-webkit-scrollbar-thumb { background: #45475a; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #585b70; }
+
+  /* ── Transfer dialog ── */
+  .transfer-progress { margin-top: 12px; }
+  .transfer-bar { height: 6px; background: #11111b; border-radius: 3px; overflow: hidden; }
+  .transfer-fill { height: 100%; background: #89b4fa; border-radius: 3px; transition: width 0.3s; }
+  .transfer-info { display: flex; justify-content: space-between; font-size: 11px; color: #6c7086; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<!-- Tab Bar -->
+<div class="tab-bar">
+  <div class="tab active" data-tab="home"><span>📁</span> Home <span class="close-tab" onclick="closeTab(event)">×</span></div>
+  <div class="tab" data-tab="docs" onclick="switchTab(this)"><span>📁</span> Documents <span class="close-tab" onclick="closeTab(event)">×</span></div>
+  <div class="tab-new" onclick="newTab()" title="New Tab">+</div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <div class="btn" onclick="navigateBack()" title="Back (Alt+←)">◀</div>
+  <div class="btn" onclick="navigateForward()" title="Forward (Alt+→)">▶</div>
+  <div class="btn" onclick="navigateUp()" title="Up (Alt+↑)">▲</div>
+  <div class="sep"></div>
+  <div class="btn" id="btn-cut" onclick="doCut()" title="Cut (Ctrl+X)">✂ Cut</div>
+  <div class="btn" id="btn-copy" onclick="doCopy()" title="Copy (Ctrl+C)">📋 Copy</div>
+  <div class="btn" id="btn-paste" class="disabled" onclick="doPaste()" title="Paste (Ctrl+V)">📌 Paste</div>
+  <div class="sep"></div>
+  <div class="btn" onclick="showNewFolderDialog()" title="New Folder (Ctrl+Shift+N)">📁+ New Folder</div>
+  <div class="btn" onclick="showNewFileDialog()" title="New File (Ctrl+N)">📄+ New File</div>
+  <div class="sep"></div>
+  <div class="btn" onclick="doSelectAll()" title="Select All (Ctrl+A)">☑ Select All</div>
+  <div class="btn" onclick="toggleBookmark()" title="Bookmark (Ctrl+D)">⭐ Bookmark</div>
+  <div class="sep"></div>
+  <div class="btn" onclick="showTerminalHere()">⬛ Terminal Here</div>
+  <div class="spacer"></div>
+  <div class="btn" onclick="togglePreview()" title="Toggle Preview (Ctrl+P)">👁 Preview</div>
+  <div class="btn" onclick="toggleSplitView()" title="Split View">◫ Split</div>
+  <div class="btn" id="btn-hidden" onclick="toggleHidden()" title="Show Hidden (Ctrl+H)">👻 Hidden</div>
+</div>
+
+<!-- Address / Breadcrumb Bar -->
+<div class="address-bar">
+  <div class="breadcrumb" id="breadcrumb">
+    <span class="crumb" onclick="navigateTo('/')">🖥 /</span>
+    <span class="sep">›</span>
+    <span class="crumb" onclick="navigateTo('/home')">home</span>
+    <span class="sep">›</span>
+    <span class="crumb active" onclick="navigateTo('/home/user')">user</span>
+  </div>
+  <div class="search-box">
+    <span class="icon">🔍</span>
+    <input type="text" placeholder="Search files..." id="search-input" oninput="filterFiles(this.value)">
+  </div>
+</div>
+
+<!-- Main Area -->
+<div class="main">
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Quick Access</div>
+      <div class="sidebar-item active" onclick="navQuick(this, '/home/user')"><span class="icon">🏠</span> Home</div>
+      <div class="sidebar-item" onclick="navQuick(this, '/home/user/Desktop')"><span class="icon">🖥</span> Desktop</div>
+      <div class="sidebar-item" onclick="navQuick(this, '/home/user/Documents')"><span class="icon">📄</span> Documents</div>
+      <div class="sidebar-item" onclick="navQuick(this, '/home/user/Downloads')"><span class="icon">⬇</span> Downloads <span class="badge">3</span></div>
+      <div class="sidebar-item" onclick="navQuick(this, '/home/user/Pictures')"><span class="icon">🖼</span> Pictures</div>
+      <div class="sidebar-item" onclick="navQuick(this, '/home/user/Music')"><span class="icon">🎵</span> Music</div>
+      <div class="sidebar-item" onclick="navQuick(this, '/home/user/Videos')"><span class="icon">🎬</span> Videos</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Bookmarks</div>
+      <div class="sidebar-item" onclick="navQuick(this, '/home/user/Projects')"><span class="icon">⭐</span> Projects</div>
+      <div class="sidebar-item" onclick="navQuick(this, '/etc')"><span class="icon">⭐</span> /etc</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Devices</div>
+      <div class="sidebar-item"><span class="icon">💾</span> disk0 (128MB)</div>
+      <div class="sidebar-item"><span class="icon">💿</span> cdrom0</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Tree View</div>
+      <div class="tree-item" onclick="toggleTree(this)"><span class="arrow open">▶</span> 📁 home</div>
+      <div class="tree-children">
+        <div class="tree-item" onclick="toggleTree(this)"><span class="arrow open">▶</span> 📁 user</div>
+        <div class="tree-children">
+          <div class="tree-item" onclick="toggleTree(this)"><span class="arrow">▶</span> 📁 Desktop</div>
+          <div class="tree-children collapsed"></div>
+          <div class="tree-item" onclick="toggleTree(this)"><span class="arrow">▶</span> 📁 Documents</div>
+          <div class="tree-children collapsed"></div>
+          <div class="tree-item" onclick="toggleTree(this)"><span class="arrow">▶</span> 📁 Downloads</div>
+          <div class="tree-children collapsed"></div>
+          <div class="tree-item" onclick="toggleTree(this)"><span class="arrow">▶</span> 📁 Projects</div>
+          <div class="tree-children collapsed">
+            <div class="tree-item"><span class="arrow" style="visibility:hidden">▶</span> 📄 main.c</div>
+            <div class="tree-item"><span class="arrow" style="visibility:hidden">▶</span> 📄 Makefile</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Content -->
+  <div class="content" id="content-area">
+    <!-- List View Header -->
+    <div class="file-list-header" id="list-header">
+      <div class="col col-name" onclick="sortBy('name')">Name <span class="sort-arrow" id="sort-name">▼</span></div>
+      <div class="col col-size" onclick="sortBy('size')">Size <span class="sort-arrow" id="sort-size"></span></div>
+      <div class="col col-type" onclick="sortBy('type')">Type <span class="sort-arrow" id="sort-type"></span></div>
+      <div class="col col-modified" onclick="sortBy('modified')">Modified <span class="sort-arrow" id="sort-modified"></span></div>
+      <div class="col col-perms" onclick="sortBy('perms')">Perms <span class="sort-arrow" id="sort-perms"></span></div>
+    </div>
+
+    <!-- List View -->
+    <div class="file-list" id="file-list" oncontextmenu="showBgContext(event)"></div>
+
+    <!-- Grid View -->
+    <div class="file-grid hidden" id="file-grid" oncontextmenu="showBgContext(event)"></div>
+  </div>
+
+  <!-- Preview Panel -->
+  <div class="preview-panel" id="preview-panel">
+    <div class="preview-icon" id="preview-icon">📁</div>
+    <div class="preview-name" id="preview-name">Documents</div>
+    <div class="preview-type" id="preview-type">Folder</div>
+    <div class="preview-section">
+      <h4>Details</h4>
+      <div class="preview-row"><span class="label">Size</span><span id="preview-size">4.2 KB</span></div>
+      <div class="preview-row"><span class="label">Items</span><span id="preview-items">12 items</span></div>
+      <div class="preview-row"><span class="label">Modified</span><span id="preview-modified">2026-05-24 14:30</span></div>
+      <div class="preview-row"><span class="label">Created</span><span id="preview-created">2026-05-20 09:00</span></div>
+      <div class="preview-row"><span class="label">Owner</span><span id="preview-owner">user</span></div>
+      <div class="preview-row"><span class="label">Permissions</span><span id="preview-perms-val">rwxr-xr-x</span></div>
+    </div>
+    <div class="preview-section">
+      <h4>Tags</h4>
+      <div class="preview-tags" id="preview-tags">
+        <span class="preview-tag" style="background:#f38ba8;color:#1e1e2e">Important</span>
+        <span class="preview-tag add" onclick="showToast('Tag picker opened')">+ Add</span>
+      </div>
+    </div>
+    <div class="preview-section" id="preview-content-section" style="display:none">
+      <h4>Preview</h4>
+      <div id="preview-content" style="font-family:monospace;font-size:11px;color:#a6adc8;white-space:pre-wrap;max-height:200px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Status Bar -->
+<div class="status-bar">
+  <span id="status-items">14 items</span>
+  <span id="status-selected"></span>
+  <span class="spacer"></span>
+  <span id="status-free">Free: 89.4 MB / 128 MB</span>
+  <div class="view-toggle">
+    <span class="view-btn active" id="view-list" onclick="setView('list')" title="List View">≡</span>
+    <span class="view-btn" id="view-grid" onclick="setView('grid')" title="Grid View">⊞</span>
+  </div>
+</div>
+
+<!-- Context Menus -->
+<div class="context-menu" id="ctx-file"></div>
+<div class="context-menu" id="ctx-bg"></div>
+<div class="context-menu" id="ctx-sidebar"></div>
+
+<!-- Modals -->
+<div class="modal-overlay hidden" id="modal-overlay" onclick="closeModal()"></div>
+<div class="modal-overlay hidden" id="modal-container"></div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Drag ghost -->
+<div class="drag-ghost" id="drag-ghost">📄 file.txt <span class="count">3</span></div>
+
+<!-- Selection rectangle -->
+<div class="select-rect" id="select-rect"></div>
+
+<script>
+// ── File Data ──
+const FILES = [
+  { name: '.config', icon: '📁', type: 'Folder', size: '4 KB', modified: '2026-05-23 10:00', perms: 'rwxr-xr-x', isDir: true, hidden: true },
+  { name: '.bashrc', icon: '📄', type: 'Shell Script', size: '1.2 KB', modified: '2026-05-20 08:15', perms: 'rw-r--r--', isDir: false, hidden: true },
+  { name: '.profile', icon: '📄', type: 'Shell Script', size: '340 B', modified: '2026-05-18 11:00', perms: 'rw-r--r--', isDir: false, hidden: true },
+  { name: 'Desktop', icon: '📁', type: 'Folder', size: '4 KB', modified: '2026-05-24 14:30', perms: 'rwxr-xr-x', isDir: true },
+  { name: 'Documents', icon: '📁', type: 'Folder', size: '4 KB', modified: '2026-05-24 14:30', perms: 'rwxr-xr-x', isDir: true },
+  { name: 'Downloads', icon: '📁', type: 'Folder', size: '156 KB', modified: '2026-05-24 12:05', perms: 'rwxr-xr-x', isDir: true },
+  { name: 'Music', icon: '🎵', type: 'Folder', size: '4 KB', modified: '2026-05-21 09:00', perms: 'rwxr-xr-x', isDir: true },
+  { name: 'Pictures', icon: '🖼', type: 'Folder', size: '4 KB', modified: '2026-05-22 16:45', perms: 'rwxr-xr-x', isDir: true },
+  { name: 'Projects', icon: '📁', type: 'Folder', size: '64 KB', modified: '2026-05-24 09:15', perms: 'rwxr-xr-x', isDir: true },
+  { name: 'Videos', icon: '🎬', type: 'Folder', size: '4 KB', modified: '2026-05-19 20:00', perms: 'rwxr-xr-x', isDir: true },
+  { name: 'notes.txt', icon: '📝', type: 'Text File', size: '2.4 KB', modified: '2026-05-24 11:22', perms: 'rw-r--r--', isDir: false, preview: '# TODO List\n- Finish file explorer\n- Fix window resize bug\n- Add clipboard support\n- Test on real hardware' },
+  { name: 'budget.csv', icon: '📊', type: 'CSV File', size: '8.7 KB', modified: '2026-05-23 15:40', perms: 'rw-r--r--', isDir: false },
+  { name: 'photo.png', icon: '🖼', type: 'PNG Image', size: '245 KB', modified: '2026-05-22 13:10', perms: 'rw-r--r--', isDir: false },
+  { name: 'main.c', icon: '📄', type: 'C Source', size: '5.6 KB', modified: '2026-05-24 10:00', perms: 'rw-r--r--', isDir: false, preview: '#include <stdio.h>\n#include <stdlib.h>\n\nint main(int argc, char **argv) {\n    printf("Hello HerOS!\\n");\n    return 0;\n}' },
+  { name: 'Makefile', icon: '⚙', type: 'Makefile', size: '1.1 KB', modified: '2026-05-24 10:00', perms: 'rw-r--r--', isDir: false },
+  { name: 'README.md', icon: '📖', type: 'Markdown', size: '3.2 KB', modified: '2026-05-23 17:00', perms: 'rw-r--r--', isDir: false, preview: '# HerOS\n\nA bare-metal graphical operating system for RISC-V.\n\n## Features\n- Window manager\n- Terminal emulator\n- File explorer' },
+  { name: 'backup.tar.gz', icon: '📦', type: 'Archive', size: '12.8 MB', modified: '2026-05-21 22:00', perms: 'rw-r--r--', isDir: false },
+  { name: 'script.sh', icon: '⬛', type: 'Shell Script', size: '890 B', modified: '2026-05-20 14:20', perms: 'rwxr-xr-x', isDir: false, executable: true },
+];
+
+let state = {
+  selected: new Set(),
+  clipboard: [],
+  clipboardOp: null, // 'copy' or 'cut'
+  showHidden: false,
+  viewMode: 'list', // 'list' or 'grid'
+  sortCol: 'name',
+  sortAsc: true,
+  previewVisible: true,
+  path: '/home/user',
+  history: ['/home/user'],
+  historyIdx: 0,
+  lastClickedIdx: null,
+};
+
+// ── Render Files ──
+function getVisibleFiles() {
+  let files = FILES.filter(f => state.showHidden || !f.hidden);
+  const q = document.getElementById('search-input').value.toLowerCase();
+  if (q) files = files.filter(f => f.name.toLowerCase().includes(q));
+  files.sort((a, b) => {
+    // Folders first
+    if (a.isDir && !b.isDir) return -1;
+    if (!a.isDir && b.isDir) return 1;
+    let va = a[state.sortCol] || '', vb = b[state.sortCol] || '';
+    if (state.sortCol === 'size') { va = parseSizeForSort(a.size); vb = parseSizeForSort(b.size); }
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    if (va < vb) return state.sortAsc ? -1 : 1;
+    if (va > vb) return state.sortAsc ? 1 : -1;
+    return 0;
+  });
+  return files;
+}
+
+function parseSizeForSort(s) {
+  const m = s.match(/([\d.]+)\s*(B|KB|MB|GB)/);
+  if (!m) return 0;
+  const v = parseFloat(m[1]);
+  const u = { B: 1, KB: 1024, MB: 1048576, GB: 1073741824 }[m[2]];
+  return v * u;
+}
+
+function renderFiles() {
+  const files = getVisibleFiles();
+  const list = document.getElementById('file-list');
+  const grid = document.getElementById('file-grid');
+
+  // List view
+  list.innerHTML = files.map((f, i) => `
+    <div class="file-row ${state.selected.has(f.name) ? 'selected' : ''} ${state.clipboardOp === 'cut' && state.clipboard.includes(f.name) ? 'cut' : ''}"
+         data-name="${f.name}" data-idx="${i}"
+         onclick="selectFile(event, '${f.name}', ${i})"
+         ondblclick="openFile('${f.name}', ${f.isDir})"
+         oncontextmenu="showFileContext(event, '${f.name}', ${f.isDir})">
+      <div class="col-name"><span class="file-icon">${f.icon}</span><span class="file-name">${f.name}</span></div>
+      <div class="col-size">${f.size}</div>
+      <div class="col-type">${f.type}</div>
+      <div class="col-modified">${f.modified}</div>
+      <div class="col-perms">${f.perms}</div>
+    </div>
+  `).join('');
+
+  // Grid view
+  grid.innerHTML = files.map((f, i) => `
+    <div class="grid-item ${state.selected.has(f.name) ? 'selected' : ''}"
+         data-name="${f.name}" data-idx="${i}"
+         onclick="selectFile(event, '${f.name}', ${i})"
+         ondblclick="openFile('${f.name}', ${f.isDir})"
+         oncontextmenu="showFileContext(event, '${f.name}', ${f.isDir})">
+      <span class="grid-icon">${f.icon}</span>
+      <span class="grid-name">${f.name}</span>
+    </div>
+  `).join('');
+
+  // Update status
+  document.getElementById('status-items').textContent = `${files.length} items`;
+  const sel = state.selected.size;
+  document.getElementById('status-selected').textContent = sel ? `(${sel} selected)` : '';
+
+  // Update sort arrows
+  ['name','size','type','modified','perms'].forEach(c => {
+    const el = document.getElementById('sort-' + c);
+    el.textContent = state.sortCol === c ? (state.sortAsc ? '▼' : '▲') : '';
+  });
+
+  updatePreview();
+}
+
+// ── Selection ──
+function selectFile(e, name, idx) {
+  e.stopPropagation();
+  if (e.ctrlKey || e.metaKey) {
+    if (state.selected.has(name)) state.selected.delete(name); else state.selected.add(name);
+  } else if (e.shiftKey && state.lastClickedIdx !== null) {
+    const files = getVisibleFiles();
+    const start = Math.min(state.lastClickedIdx, idx);
+    const end = Math.max(state.lastClickedIdx, idx);
+    for (let i = start; i <= end; i++) state.selected.add(files[i].name);
+  } else {
+    state.selected = new Set([name]);
+  }
+  state.lastClickedIdx = idx;
+  renderFiles();
+}
+
+function doSelectAll() {
+  const files = getVisibleFiles();
+  state.selected = new Set(files.map(f => f.name));
+  renderFiles();
+  showToast(`Selected ${files.length} items`);
+}
+
+// ── Open / Navigate ──
+function openFile(name, isDir) {
+  if (isDir) {
+    navigateTo(state.path + '/' + name);
+  } else {
+    showToast(`Opening ${name}...`);
+  }
+}
+
+function navigateTo(path) {
+  state.path = path;
+  state.selected = new Set();
+  // Update breadcrumbs
+  const bc = document.getElementById('breadcrumb');
+  const parts = path.split('/').filter(Boolean);
+  bc.innerHTML = `<span class="crumb" onclick="navigateTo('/')">🖥 /</span>`;
+  let accum = '';
+  parts.forEach((p, i) => {
+    accum += '/' + p;
+    const a = accum;
+    bc.innerHTML += `<span class="sep">›</span><span class="crumb ${i === parts.length - 1 ? 'active' : ''}" onclick="navigateTo('${a}')">${p}</span>`;
+  });
+  state.history = state.history.slice(0, state.historyIdx + 1);
+  state.history.push(path);
+  state.historyIdx = state.history.length - 1;
+  renderFiles();
+  showToast(`Navigated to ${path}`);
+}
+
+function navigateBack() {
+  if (state.historyIdx > 0) {
+    state.historyIdx--;
+    state.path = state.history[state.historyIdx];
+    renderFiles();
+  }
+}
+function navigateForward() {
+  if (state.historyIdx < state.history.length - 1) {
+    state.historyIdx++;
+    state.path = state.history[state.historyIdx];
+    renderFiles();
+  }
+}
+function navigateUp() {
+  const parts = state.path.split('/').filter(Boolean);
+  if (parts.length > 0) {
+    parts.pop();
+    navigateTo('/' + parts.join('/'));
+  }
+}
+
+function navQuick(el, path) {
+  document.querySelectorAll('.sidebar-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  navigateTo(path);
+}
+
+// ── View Modes ──
+function setView(mode) {
+  state.viewMode = mode;
+  document.getElementById('file-list').classList.toggle('hidden', mode !== 'list');
+  document.getElementById('list-header').classList.toggle('hidden', mode !== 'list');
+  document.getElementById('file-grid').classList.toggle('hidden', mode !== 'grid');
+  document.getElementById('view-list').classList.toggle('active', mode === 'list');
+  document.getElementById('view-grid').classList.toggle('active', mode === 'grid');
+}
+
+function togglePreview() {
+  state.previewVisible = !state.previewVisible;
+  document.getElementById('preview-panel').classList.toggle('hidden', !state.previewVisible);
+}
+
+function toggleHidden() {
+  state.showHidden = !state.showHidden;
+  document.getElementById('btn-hidden').style.background = state.showHidden ? '#45475a' : '';
+  renderFiles();
+  showToast(state.showHidden ? 'Showing hidden files' : 'Hidden files hidden');
+}
+
+function toggleSplitView() { showToast('Split view toggled (demo)'); }
+
+// ── Sort ──
+function sortBy(col) {
+  if (state.sortCol === col) state.sortAsc = !state.sortAsc;
+  else { state.sortCol = col; state.sortAsc = true; }
+  renderFiles();
+}
+
+// ── Search / Filter ──
+function filterFiles(q) { renderFiles(); }
+
+// ── Clipboard ──
+function doCopy() {
+  if (state.selected.size === 0) return;
+  state.clipboard = [...state.selected];
+  state.clipboardOp = 'copy';
+  renderFiles();
+  showToast(`Copied ${state.clipboard.length} item(s)`);
+}
+function doCut() {
+  if (state.selected.size === 0) return;
+  state.clipboard = [...state.selected];
+  state.clipboardOp = 'cut';
+  renderFiles();
+  showToast(`Cut ${state.clipboard.length} item(s)`);
+}
+function doPaste() {
+  if (state.clipboard.length === 0) return;
+  showTransferDialog(state.clipboardOp === 'cut' ? 'Moving' : 'Copying', state.clipboard);
+  if (state.clipboardOp === 'cut') { state.clipboard = []; state.clipboardOp = null; }
+  renderFiles();
+}
+
+// ── Preview Panel ──
+function updatePreview() {
+  if (state.selected.size === 0) {
+    document.getElementById('preview-icon').textContent = '📁';
+    document.getElementById('preview-name').textContent = state.path.split('/').pop() || '/';
+    document.getElementById('preview-type').textContent = 'Current Folder';
+    document.getElementById('preview-items').textContent = getVisibleFiles().length + ' items';
+    document.getElementById('preview-content-section').style.display = 'none';
+    return;
+  }
+  if (state.selected.size > 1) {
+    document.getElementById('preview-icon').textContent = '📑';
+    document.getElementById('preview-name').textContent = `${state.selected.size} items selected`;
+    let total = 0;
+    state.selected.forEach(n => { const f = FILES.find(x => x.name === n); if (f) total += parseSizeForSort(f.size); });
+    document.getElementById('preview-type').textContent = 'Multiple Selection';
+    document.getElementById('preview-size').textContent = formatSize(total);
+    document.getElementById('preview-items').textContent = `${state.selected.size} items`;
+    document.getElementById('preview-content-section').style.display = 'none';
+    return;
+  }
+  const name = [...state.selected][0];
+  const f = FILES.find(x => x.name === name);
+  if (!f) return;
+  document.getElementById('preview-icon').textContent = f.icon;
+  document.getElementById('preview-name').textContent = f.name;
+  document.getElementById('preview-type').textContent = f.type;
+  document.getElementById('preview-size').textContent = f.size;
+  document.getElementById('preview-items').textContent = f.isDir ? '—' : '1 file';
+  document.getElementById('preview-modified').textContent = f.modified;
+  document.getElementById('preview-perms-val').textContent = f.perms;
+  if (f.preview) {
+    document.getElementById('preview-content-section').style.display = '';
+    document.getElementById('preview-content').textContent = f.preview;
+  } else {
+    document.getElementById('preview-content-section').style.display = 'none';
+  }
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// ── Context Menus ──
+function hideAllMenus() {
+  document.querySelectorAll('.context-menu').forEach(m => m.classList.remove('show'));
+}
+
+document.addEventListener('click', hideAllMenus);
+
+function showCtx(id, x, y, items) {
+  hideAllMenus();
+  const menu = document.getElementById(id);
+  menu.innerHTML = items.map(item => {
+    if (item === '---') return '<div class="ctx-sep"></div>';
+    const cls = [item.danger ? 'danger' : '', item.disabled ? 'disabled' : ''].filter(Boolean).join(' ');
+    return `<div class="ctx-item ${cls}" onclick="${item.action || ''}; hideAllMenus()">
+      <span class="icon">${item.icon || ''}</span> ${item.label}
+      ${item.shortcut ? `<span class="shortcut">${item.shortcut}</span>` : ''}
+      ${item.sub ? '<span class="ctx-submenu-arrow">▶</span>' : ''}
+    </div>`;
+  }).join('');
+  menu.style.left = Math.min(x, window.innerWidth - 240) + 'px';
+  menu.style.top = Math.min(y, window.innerHeight - menu.offsetHeight - 10) + 'px';
+  menu.classList.add('show');
+}
+
+function showFileContext(e, name, isDir) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!state.selected.has(name)) { state.selected = new Set([name]); renderFiles(); }
+  const multi = state.selected.size > 1;
+  const items = [
+    { icon: '📂', label: 'Open', action: `openFile('${name}', ${isDir})`, shortcut: 'Enter' },
+    ...(isDir ? [
+      { icon: '🗂', label: 'Open in New Tab', action: `showToast('Opened in new tab')`, shortcut: 'Ctrl+T' },
+      { icon: '⬛', label: 'Open Terminal Here', action: `showToast('Terminal opened at ${name}')` },
+    ] : [
+      { icon: '📝', label: 'Open With...', action: `showOpenWithDialog('${name}')` },
+      { icon: '👁', label: 'Quick Preview', action: `showToast('Preview: ${name}')`, shortcut: 'Space' },
+    ]),
+    '---',
+    { icon: '✂', label: 'Cut', action: 'doCut()', shortcut: 'Ctrl+X' },
+    { icon: '📋', label: 'Copy', action: 'doCopy()', shortcut: 'Ctrl+C' },
+    ...(isDir ? [] : [{ icon: '📎', label: 'Copy Path', action: `copyPath('${name}')`, shortcut: 'Ctrl+Shift+C' }]),
+    { icon: '📌', label: 'Paste', action: 'doPaste()', shortcut: 'Ctrl+V', disabled: state.clipboard.length === 0 },
+    '---',
+    { icon: '✏', label: 'Rename', action: `showRenameDialog('${name}')`, shortcut: 'F2' },
+    { icon: '📑', label: 'Duplicate', action: `showToast('Duplicated ${name}')` },
+    { icon: '🔗', label: 'Create Symlink', action: `showToast('Symlink created')` },
+    '---',
+    { icon: '📦', label: multi ? `Compress ${state.selected.size} items...` : 'Compress...', action: `showCompressDialog()` },
+    ...(name.endsWith('.tar.gz') || name.endsWith('.zip') ? [{ icon: '📂', label: 'Extract Here', action: `showToast('Extracting...')` }, { icon: '📂', label: 'Extract To...', action: `showToast('Choose destination...')` }] : []),
+    '---',
+    { icon: '⭐', label: 'Add to Bookmarks', action: `showToast('Bookmarked ${name}')` },
+    { icon: '🏷', label: 'Tags...', action: `showTagDialog('${name}')` },
+    '---',
+    { icon: '🔒', label: 'Permissions...', action: `showPropertiesDialog('${name}', 'perms')` },
+    { icon: 'ℹ', label: 'Properties', action: `showPropertiesDialog('${name}')`, shortcut: 'Alt+Enter' },
+    '---',
+    { icon: '🗑', label: multi ? `Delete ${state.selected.size} items` : 'Delete', action: `showDeleteDialog()`, shortcut: 'Del', danger: true },
+  ];
+  showCtx('ctx-file', e.clientX, e.clientY, items);
+}
+
+function showBgContext(e) {
+  e.preventDefault();
+  state.selected = new Set();
+  renderFiles();
+  const items = [
+    { icon: '📁', label: 'New Folder', action: 'showNewFolderDialog()', shortcut: 'Ctrl+Shift+N' },
+    { icon: '📄', label: 'New File', action: 'showNewFileDialog()', shortcut: 'Ctrl+N' },
+    '---',
+    { icon: '📌', label: 'Paste', action: 'doPaste()', shortcut: 'Ctrl+V', disabled: state.clipboard.length === 0 },
+    '---',
+    { icon: '☑', label: 'Select All', action: 'doSelectAll()', shortcut: 'Ctrl+A' },
+    '---',
+    { icon: '🔃', label: 'Refresh', action: `showToast('Refreshed')`, shortcut: 'F5' },
+    '---',
+    { icon: '≡', label: 'Sort by Name', action: `sortBy('name')` },
+    { icon: '≡', label: 'Sort by Size', action: `sortBy('size')` },
+    { icon: '≡', label: 'Sort by Type', action: `sortBy('type')` },
+    { icon: '≡', label: 'Sort by Modified', action: `sortBy('modified')` },
+    '---',
+    { icon: '📊', label: 'View as List', action: `setView('list')` },
+    { icon: '⊞', label: 'View as Grid', action: `setView('grid')` },
+    '---',
+    { icon: '👻', label: state.showHidden ? 'Hide Hidden Files' : 'Show Hidden Files', action: 'toggleHidden()', shortcut: 'Ctrl+H' },
+    '---',
+    { icon: '⬛', label: 'Open Terminal Here', action: `showTerminalHere()` },
+    { icon: 'ℹ', label: 'Folder Properties', action: `showPropertiesDialog('.')` },
+  ];
+  showCtx('ctx-bg', e.clientX, e.clientY, items);
+}
+
+// ── Tree View ──
+function toggleTree(el) {
+  const arrow = el.querySelector('.arrow');
+  const children = el.nextElementSibling;
+  if (children && children.classList.contains('tree-children')) {
+    children.classList.toggle('collapsed');
+    arrow.classList.toggle('open');
+  }
+}
+
+// ── Dialogs ──
+function showModal(title, bodyHtml, buttons) {
+  const overlay = document.getElementById('modal-container');
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-header"><h3>${title}</h3><span class="modal-close" onclick="closeModal()">×</span></div>
+      <div class="modal-body">${bodyHtml}</div>
+      <div class="modal-footer">${buttons.map(b =>
+        `<button class="modal-btn ${b.cls || ''}" onclick="${b.action}">${b.label}</button>`
+      ).join('')}</div>
+    </div>`;
+  overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+}
+
+function closeModal() {
+  document.getElementById('modal-container').classList.add('hidden');
+  document.getElementById('modal-container').innerHTML = '';
+}
+
+function showNewFolderDialog() {
+  showModal('New Folder',
+    `<label class="modal-label">Folder name:</label><input class="modal-input" id="new-folder-name" value="New Folder" autofocus>`,
+    [{ label: 'Cancel', action: 'closeModal()' }, { label: 'Create', cls: 'primary', action: 'createNewFolder()' }]
+  );
+  setTimeout(() => { const inp = document.getElementById('new-folder-name'); inp.focus(); inp.select(); }, 100);
+}
+
+function createNewFolder() {
+  const name = document.getElementById('new-folder-name').value.trim();
+  if (name) {
+    FILES.unshift({ name, icon: '📁', type: 'Folder', size: '4 KB', modified: '2026-05-24 15:00', perms: 'rwxr-xr-x', isDir: true });
+    closeModal();
+    renderFiles();
+    showToast(`Created folder "${name}"`);
+  }
+}
+
+function showNewFileDialog() {
+  showModal('New File',
+    `<label class="modal-label">File name:</label><input class="modal-input" id="new-file-name" value="untitled.txt" autofocus>`,
+    [{ label: 'Cancel', action: 'closeModal()' }, { label: 'Create', cls: 'primary', action: 'createNewFile()' }]
+  );
+  setTimeout(() => { const inp = document.getElementById('new-file-name'); inp.focus(); inp.setSelectionRange(0, inp.value.lastIndexOf('.')); }, 100);
+}
+
+function createNewFile() {
+  const name = document.getElementById('new-file-name').value.trim();
+  if (name) {
+    FILES.push({ name, icon: '📄', type: 'Text File', size: '0 B', modified: '2026-05-24 15:00', perms: 'rw-r--r--', isDir: false });
+    closeModal();
+    renderFiles();
+    showToast(`Created file "${name}"`);
+  }
+}
+
+function showRenameDialog(name) {
+  showModal('Rename',
+    `<label class="modal-label">Rename "${name}" to:</label><input class="modal-input" id="rename-input" value="${name}" autofocus>`,
+    [{ label: 'Cancel', action: 'closeModal()' }, { label: 'Rename', cls: 'primary', action: `doRename('${name}')` }]
+  );
+  setTimeout(() => {
+    const inp = document.getElementById('rename-input');
+    inp.focus();
+    const dot = name.lastIndexOf('.');
+    inp.setSelectionRange(0, dot > 0 ? dot : name.length);
+  }, 100);
+}
+
+function doRename(oldName) {
+  const newName = document.getElementById('rename-input').value.trim();
+  if (newName && newName !== oldName) {
+    const f = FILES.find(x => x.name === oldName);
+    if (f) { f.name = newName; state.selected = new Set([newName]); }
+    closeModal();
+    renderFiles();
+    showToast(`Renamed to "${newName}"`);
+  }
+}
+
+function showDeleteDialog() {
+  const items = [...state.selected];
+  const count = items.length;
+  const label = count === 1 ? `"${items[0]}"` : `${count} items`;
+  showModal('Delete',
+    `<p class="modal-text">Are you sure you want to delete ${label}?</p>
+     <p class="modal-text" style="color:#f38ba8;margin-top:8px">⚠ This action cannot be undone.</p>`,
+    [{ label: 'Cancel', action: 'closeModal()' }, { label: 'Delete', cls: 'danger', action: 'doDelete()' }]
+  );
+}
+
+function doDelete() {
+  const items = [...state.selected];
+  items.forEach(name => {
+    const idx = FILES.findIndex(f => f.name === name);
+    if (idx >= 0) FILES.splice(idx, 1);
+  });
+  state.selected = new Set();
+  closeModal();
+  renderFiles();
+  showToastWithUndo(`Deleted ${items.length} item(s)`, () => {
+    showToast('Undo not implemented in wireframe');
+  });
+}
+
+function showPropertiesDialog(name, focusTab) {
+  const f = FILES.find(x => x.name === name) || { name: state.path.split('/').pop(), icon: '📁', type: 'Folder', size: '4 KB', modified: '2026-05-24', perms: 'rwxr-xr-x', isDir: true };
+  const permsChecked = (pos) => f.perms[pos] !== '-' ? 'checked' : '';
+  showModal(`Properties — ${f.name}`,
+    `<div class="props-grid">
+      <div class="label">Name:</div><div class="value">${f.name}</div>
+      <div class="label">Type:</div><div class="value">${f.type}</div>
+      <div class="label">Location:</div><div class="value">${state.path}</div>
+      <div class="label">Size:</div><div class="value">${f.size}</div>
+      <div class="label">Modified:</div><div class="value">${f.modified}</div>
+      <div class="label">Owner:</div><div class="value">user:user</div>
+    </div>
+    <div class="props-perms">
+      <h4 style="font-size:12px;color:#6c7086;margin:12px 0 6px">Permissions</h4>
+      <table>
+        <tr><th></th><th>Read</th><th>Write</th><th>Execute</th></tr>
+        <tr><td style="text-align:left;color:#a6adc8">Owner</td>
+            <td><input type="checkbox" class="props-check" ${permsChecked(0)}></td>
+            <td><input type="checkbox" class="props-check" ${permsChecked(1)}></td>
+            <td><input type="checkbox" class="props-check" ${permsChecked(2)}></td></tr>
+        <tr><td style="text-align:left;color:#a6adc8">Group</td>
+            <td><input type="checkbox" class="props-check" ${permsChecked(3)}></td>
+            <td><input type="checkbox" class="props-check" ${permsChecked(4)}></td>
+            <td><input type="checkbox" class="props-check" ${permsChecked(5)}></td></tr>
+        <tr><td style="text-align:left;color:#a6adc8">Other</td>
+            <td><input type="checkbox" class="props-check" ${permsChecked(6)}></td>
+            <td><input type="checkbox" class="props-check" ${permsChecked(7)}></td>
+            <td><input type="checkbox" class="props-check" ${permsChecked(8)}></td></tr>
+      </table>
+    </div>`,
+    [{ label: 'Cancel', action: 'closeModal()' }, { label: 'Apply', cls: 'primary', action: `closeModal(); showToast('Properties saved')` }]
+  );
+}
+
+function showCompressDialog() {
+  const items = [...state.selected];
+  const defaultName = items.length === 1 ? items[0] + '.tar.gz' : 'archive.tar.gz';
+  showModal('Compress',
+    `<label class="modal-label">Compressing ${items.length} item(s)</label>
+     <label class="modal-label" style="margin-top:12px">Archive name:</label>
+     <input class="modal-input" id="compress-name" value="${defaultName}">
+     <label class="modal-label" style="margin-top:12px">Format:</label>
+     <select class="modal-input" id="compress-fmt">
+       <option>.tar.gz (gzip)</option>
+       <option>.tar.bz2 (bzip2)</option>
+       <option>.zip</option>
+       <option>.tar</option>
+     </select>`,
+    [{ label: 'Cancel', action: 'closeModal()' }, { label: 'Compress', cls: 'primary', action: `closeModal(); showToast('Compression started...')` }]
+  );
+}
+
+function showOpenWithDialog(name) {
+  showModal('Open With',
+    `<p class="modal-text">Choose application to open "${name}":</p>
+     <div style="margin-top:12px">
+       <div class="ctx-item" onclick="closeModal(); showToast('Opening with Text Editor')" style="border-radius:4px">📝 Text Editor</div>
+       <div class="ctx-item" onclick="closeModal(); showToast('Opening with Hex Viewer')" style="border-radius:4px">🔢 Hex Viewer</div>
+       <div class="ctx-item" onclick="closeModal(); showToast('Opening with Image Viewer')" style="border-radius:4px">🖼 Image Viewer</div>
+       <div class="ctx-item" onclick="closeModal(); showToast('Opening with Terminal')" style="border-radius:4px">⬛ Terminal</div>
+     </div>`,
+    [{ label: 'Cancel', action: 'closeModal()' }]
+  );
+}
+
+function showTagDialog(name) {
+  showModal('Tags',
+    `<p class="modal-text">Tags for "${name}":</p>
+     <div class="preview-tags" style="margin-top:12px">
+       <span class="preview-tag" style="background:#f38ba8;color:#1e1e2e;cursor:pointer" onclick="this.remove()">Important ×</span>
+       <span class="preview-tag" style="background:#a6e3a1;color:#1e1e2e;cursor:pointer" onclick="this.remove()">Work ×</span>
+       <span class="preview-tag" style="background:#89b4fa;color:#1e1e2e;cursor:pointer" onclick="this.remove()">Code ×</span>
+     </div>
+     <label class="modal-label" style="margin-top:12px">Add tag:</label>
+     <input class="modal-input" placeholder="Type tag name...">
+     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+       <span class="preview-tag" style="cursor:pointer" onclick="showToast('Tag added')">📌 Project</span>
+       <span class="preview-tag" style="cursor:pointer" onclick="showToast('Tag added')">📌 Personal</span>
+       <span class="preview-tag" style="cursor:pointer" onclick="showToast('Tag added')">📌 Archive</span>
+       <span class="preview-tag" style="cursor:pointer" onclick="showToast('Tag added')">📌 Urgent</span>
+     </div>`,
+    [{ label: 'Cancel', action: 'closeModal()' }, { label: 'Save', cls: 'primary', action: `closeModal(); showToast('Tags saved')` }]
+  );
+}
+
+function showTransferDialog(op, items) {
+  showModal(`${op} Files`,
+    `<p class="modal-text">${op} ${items.length} item(s) to ${state.path}</p>
+     <div class="transfer-progress">
+       <div class="transfer-bar"><div class="transfer-fill" id="transfer-fill" style="width:0%"></div></div>
+       <div class="transfer-info"><span id="transfer-file">Preparing...</span><span id="transfer-pct">0%</span></div>
+     </div>`,
+    [{ label: 'Cancel', action: 'closeModal()' }]
+  );
+  // Animate
+  let pct = 0;
+  const iv = setInterval(() => {
+    pct += Math.random() * 25 + 10;
+    if (pct >= 100) { pct = 100; clearInterval(iv); setTimeout(() => { closeModal(); showToast(`${op} complete!`); }, 400); }
+    document.getElementById('transfer-fill').style.width = pct + '%';
+    document.getElementById('transfer-pct').textContent = Math.round(pct) + '%';
+    document.getElementById('transfer-file').textContent = items[Math.floor(Math.random() * items.length)];
+  }, 300);
+}
+
+// ── Toasts ──
+function showToast(msg) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+function showToastWithUndo(msg, undoFn) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = `${msg} <span class="undo-btn" onclick="this.parentElement.remove()">Undo</span>`;
+  t.querySelector('.undo-btn').addEventListener('click', undoFn);
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 5000);
+}
+
+// ── Misc ──
+function copyPath(name) {
+  const path = state.path + '/' + name;
+  showToast(`Copied path: ${path}`);
+}
+
+function toggleBookmark() { showToast('Bookmark toggled'); }
+
+function showTerminalHere() { showToast(`Terminal opened at ${state.path}`); }
+
+function switchTab(el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  showToast('Switched tab');
+}
+
+function newTab() { showToast('New tab opened'); }
+
+function closeTab(e) {
+  e.stopPropagation();
+  const tab = e.target.closest('.tab');
+  if (document.querySelectorAll('.tab').length > 1) {
+    tab.remove();
+    const remaining = document.querySelector('.tab');
+    if (remaining) remaining.classList.add('active');
+  }
+}
+
+// ── Keyboard Shortcuts ──
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.ctrlKey && e.key === 'a') { e.preventDefault(); doSelectAll(); }
+  if (e.ctrlKey && e.key === 'c') { e.preventDefault(); doCopy(); }
+  if (e.ctrlKey && e.key === 'x') { e.preventDefault(); doCut(); }
+  if (e.ctrlKey && e.key === 'v') { e.preventDefault(); doPaste(); }
+  if (e.ctrlKey && e.key === 'h') { e.preventDefault(); toggleHidden(); }
+  if (e.ctrlKey && e.key === 'p') { e.preventDefault(); togglePreview(); }
+  if (e.key === 'Delete') { if (state.selected.size) showDeleteDialog(); }
+  if (e.key === 'F2') { const s = [...state.selected]; if (s.length === 1) showRenameDialog(s[0]); }
+  if (e.key === 'F5') { showToast('Refreshed'); }
+  if (e.key === 'Escape') { state.selected = new Set(); renderFiles(); hideAllMenus(); closeModal(); }
+  if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); navigateBack(); }
+  if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); navigateForward(); }
+  if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); navigateUp(); }
+  if (e.key === 'Enter' && state.selected.size === 1) {
+    const name = [...state.selected][0];
+    const f = FILES.find(x => x.name === name);
+    if (f) openFile(f.name, f.isDir);
+  }
+  // Arrow key navigation
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const files = getVisibleFiles();
+    if (files.length === 0) return;
+    let idx = state.lastClickedIdx ?? -1;
+    if (e.key === 'ArrowDown') idx = Math.min(idx + 1, files.length - 1);
+    else idx = Math.max(idx - 1, 0);
+    state.selected = new Set([files[idx].name]);
+    state.lastClickedIdx = idx;
+    renderFiles();
+    // Scroll into view
+    const row = document.querySelector(`[data-idx="${idx}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  }
+});
+
+// ── Init ──
+renderFiles();
+</script>
+</body>
+</html>
