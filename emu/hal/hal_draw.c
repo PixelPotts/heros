@@ -1,6 +1,26 @@
 #include "hal_draw.h"
 #include "hal_fb.h"
 
+/* GPU MMIO registers */
+#define GPU_MMIO_BASE     0x21100000
+#define GPU_CMD_REG       (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x00))
+#define GPU_X_REG         (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x04))
+#define GPU_Y_REG         (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x08))
+#define GPU_W_REG         (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x0C))
+#define GPU_H_REG         (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x10))
+#define GPU_COLOR_REG     (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x14))
+#define GPU_DST_REG       (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x1C))
+#define GPU_STRIDE_REG    (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x20))
+#define GPU_RADIUS_REG    (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x24))
+#define GPU_X1_REG        (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x30))
+#define GPU_Y1_REG        (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x34))
+
+#define GPU_CMD_RRECT_FILL  6
+#define GPU_CMD_RRECT_BLEND 7
+#define GPU_CMD_CIRCLE_FILL 8
+#define GPU_CMD_CIRCLE_BLEND 9
+#define GPU_CMD_LINE        10
+
 /* ── Sin lookup table (256 entries, Q8 fixed-point) ──────────── */
 /* sin(i * 2*pi / 256) * 256, for i = 0..63 (first quadrant) */
 static const int16_t sin_table[65] = {
@@ -41,9 +61,29 @@ unsigned int hal_isqrt(unsigned int n)
     return x;
 }
 
-/* ── Bresenham line ──────────────────────────────────────────── */
+static inline uint32_t gpu_pack_color(hal_color_t c)
+{
+    return (uint32_t)c.r | ((uint32_t)c.g << 8)
+         | ((uint32_t)c.b << 16) | ((uint32_t)c.a << 24);
+}
+
+/* ── Bresenham line (GPU accelerated) ──────────────────────── */
 void hal_draw_line(int x0, int y0, int x1, int y1, hal_color_t c)
 {
+    uint8_t *buf = hal_fb_buffer();
+    if (buf) {
+        GPU_X_REG      = (uint32_t)x0;
+        GPU_Y_REG      = (uint32_t)y0;
+        GPU_X1_REG     = (uint32_t)x1;
+        GPU_Y1_REG     = (uint32_t)y1;
+        GPU_COLOR_REG  = gpu_pack_color(c);
+        GPU_DST_REG    = (uint32_t)(uintptr_t)buf;
+        GPU_STRIDE_REG = (uint32_t)(HAL_SCREEN_W * 4);
+        GPU_CMD_REG    = GPU_CMD_LINE;
+        return;
+    }
+
+    /* Software fallback */
     int dx = x1 - x0;
     int dy = y1 - y0;
     int sx = (dx > 0) ? 1 : -1;
@@ -95,130 +135,53 @@ void hal_draw_filled_rect_blend(hal_rect_t r, hal_color_t c)
     hal_fb_fill_rect_blend(r, c);
 }
 
-/* ── Rounded rectangle ──────────────────────────────────────── */
-static void __attribute__((unused)) draw_rounded_corners(int cx, int cy, int radius,
-                                   int x0, int y0, int x1, int y1,
-                                   hal_color_t c, int filled, int blend)
-{
-    /* Midpoint circle for the 4 corners */
-    int x = 0, y = radius, d = 1 - radius;
-
-    while (x <= y) {
-        if (filled) {
-            /* Top-left */
-            int lx, rx, ty;
-            /* Horizontal spans for each octant pair */
-
-            /* Top portion: cy - y row, cx - x to cx + x */
-            ty = cy - y;
-            if (ty >= y0 && ty < y1) {
-                lx = cx - x; rx = cx + x;
-                if (blend)
-                    hal_fb_fill_rect_blend(hal_rect(x0 > lx ? x0 : lx, ty,
-                        ((x1 < rx+1 ? x1 : rx+1) - (x0 > lx ? x0 : lx)), 1), c);
-                else
-                    hal_fb_fill_rect(hal_rect(x0 > lx ? x0 : lx, ty,
-                        ((x1 < rx+1 ? x1 : rx+1) - (x0 > lx ? x0 : lx)), 1), c);
-            }
-            ty = cy + y;
-            if (ty >= y0 && ty < y1) {
-                lx = cx - x; rx = cx + x;
-                if (blend)
-                    hal_fb_fill_rect_blend(hal_rect(x0 > lx ? x0 : lx, ty,
-                        ((x1 < rx+1 ? x1 : rx+1) - (x0 > lx ? x0 : lx)), 1), c);
-                else
-                    hal_fb_fill_rect(hal_rect(x0 > lx ? x0 : lx, ty,
-                        ((x1 < rx+1 ? x1 : rx+1) - (x0 > lx ? x0 : lx)), 1), c);
-            }
-            ty = cy - x;
-            if (ty >= y0 && ty < y1 && x != y) {
-                lx = cx - y; rx = cx + y;
-                if (blend)
-                    hal_fb_fill_rect_blend(hal_rect(x0 > lx ? x0 : lx, ty,
-                        ((x1 < rx+1 ? x1 : rx+1) - (x0 > lx ? x0 : lx)), 1), c);
-                else
-                    hal_fb_fill_rect(hal_rect(x0 > lx ? x0 : lx, ty,
-                        ((x1 < rx+1 ? x1 : rx+1) - (x0 > lx ? x0 : lx)), 1), c);
-            }
-            ty = cy + x;
-            if (ty >= y0 && ty < y1 && x != y) {
-                lx = cx - y; rx = cx + y;
-                if (blend)
-                    hal_fb_fill_rect_blend(hal_rect(x0 > lx ? x0 : lx, ty,
-                        ((x1 < rx+1 ? x1 : rx+1) - (x0 > lx ? x0 : lx)), 1), c);
-                else
-                    hal_fb_fill_rect(hal_rect(x0 > lx ? x0 : lx, ty,
-                        ((x1 < rx+1 ? x1 : rx+1) - (x0 > lx ? x0 : lx)), 1), c);
-            }
-        } else {
-            /* Outline only */
-            hal_fb_pixel_blend(cx + x, cy + y, c);
-            hal_fb_pixel_blend(cx - x, cy + y, c);
-            hal_fb_pixel_blend(cx + x, cy - y, c);
-            hal_fb_pixel_blend(cx - x, cy - y, c);
-            hal_fb_pixel_blend(cx + y, cy + x, c);
-            hal_fb_pixel_blend(cx - y, cy + x, c);
-            hal_fb_pixel_blend(cx + y, cy - x, c);
-            hal_fb_pixel_blend(cx - y, cy - x, c);
-        }
-
-        x++;
-        if (d < 0) {
-            d += 2 * x + 1;
-        } else {
-            y--;
-            d += 2 * (x - y) + 1;
-        }
-    }
-}
-
+/* ── Rounded rectangle (GPU accelerated) ──────────────────── */
 void hal_draw_filled_rounded_rect(hal_rect_t r, int radius, hal_color_t c)
 {
     if (radius <= 0) { hal_fb_fill_rect(r, c); return; }
     if (radius > r.w / 2) radius = r.w / 2;
     if (radius > r.h / 2) radius = r.h / 2;
 
-    /* Center rectangle */
+    uint8_t *buf = hal_fb_buffer();
+    if (buf) {
+        GPU_X_REG      = (uint32_t)r.x;
+        GPU_Y_REG      = (uint32_t)r.y;
+        GPU_W_REG      = (uint32_t)r.w;
+        GPU_H_REG      = (uint32_t)r.h;
+        GPU_COLOR_REG  = gpu_pack_color(c);
+        GPU_DST_REG    = (uint32_t)(uintptr_t)buf;
+        GPU_STRIDE_REG = (uint32_t)(HAL_SCREEN_W * 4);
+        GPU_RADIUS_REG = (uint32_t)radius;
+        GPU_CMD_REG    = GPU_CMD_RRECT_FILL;
+        return;
+    }
+
+    /* Software fallback */
     hal_fb_fill_rect(hal_rect(r.x + radius, r.y, r.w - 2 * radius, r.h), c);
-    /* Left strip */
     hal_fb_fill_rect(hal_rect(r.x, r.y + radius, radius, r.h - 2 * radius), c);
-    /* Right strip */
     hal_fb_fill_rect(hal_rect(r.x + r.w - radius, r.y + radius, radius, r.h - 2 * radius), c);
 
-    /* Four corner quarter-circles */
-    /* Top-left */
     int cx, cy;
     cx = r.x + radius; cy = r.y + radius;
-    for (int py = 0; py < radius; py++) {
-        for (int px = 0; px < radius; px++) {
+    for (int py = 0; py < radius; py++)
+        for (int px = 0; px < radius; px++)
             if (px * px + py * py <= radius * radius)
                 hal_fb_pixel(cx - radius + px, cy - radius + py, c);
-        }
-    }
-    /* Top-right */
     cx = r.x + r.w - radius - 1; cy = r.y + radius;
-    for (int py = 0; py < radius; py++) {
-        for (int px = 0; px < radius; px++) {
+    for (int py = 0; py < radius; py++)
+        for (int px = 0; px < radius; px++)
             if (px * px + py * py <= radius * radius)
                 hal_fb_pixel(cx + radius - px, cy - radius + py, c);
-        }
-    }
-    /* Bottom-left */
     cx = r.x + radius; cy = r.y + r.h - radius - 1;
-    for (int py = 0; py < radius; py++) {
-        for (int px = 0; px < radius; px++) {
+    for (int py = 0; py < radius; py++)
+        for (int px = 0; px < radius; px++)
             if (px * px + py * py <= radius * radius)
                 hal_fb_pixel(cx - radius + px, cy + radius - py, c);
-        }
-    }
-    /* Bottom-right */
     cx = r.x + r.w - radius - 1; cy = r.y + r.h - radius - 1;
-    for (int py = 0; py < radius; py++) {
-        for (int px = 0; px < radius; px++) {
+    for (int py = 0; py < radius; py++)
+        for (int px = 0; px < radius; px++)
             if (px * px + py * py <= radius * radius)
                 hal_fb_pixel(cx + radius - px, cy + radius - py, c);
-        }
-    }
 }
 
 void hal_draw_filled_rounded_rect_blend(hal_rect_t r, int radius, hal_color_t c)
@@ -229,33 +192,41 @@ void hal_draw_filled_rounded_rect_blend(hal_rect_t r, int radius, hal_color_t c)
     if (radius > r.w / 2) radius = r.w / 2;
     if (radius > r.h / 2) radius = r.h / 2;
 
-    /* Center rectangle */
+    uint8_t *buf = hal_fb_buffer();
+    if (buf) {
+        GPU_X_REG      = (uint32_t)r.x;
+        GPU_Y_REG      = (uint32_t)r.y;
+        GPU_W_REG      = (uint32_t)r.w;
+        GPU_H_REG      = (uint32_t)r.h;
+        GPU_COLOR_REG  = gpu_pack_color(c);
+        GPU_DST_REG    = (uint32_t)(uintptr_t)buf;
+        GPU_STRIDE_REG = (uint32_t)(HAL_SCREEN_W * 4);
+        GPU_RADIUS_REG = (uint32_t)radius;
+        GPU_CMD_REG    = GPU_CMD_RRECT_BLEND;
+        return;
+    }
+
+    /* Software fallback */
     hal_fb_fill_rect_blend(hal_rect(r.x + radius, r.y, r.w - 2 * radius, r.h), c);
-    /* Left strip */
     hal_fb_fill_rect_blend(hal_rect(r.x, r.y + radius, radius, r.h - 2 * radius), c);
-    /* Right strip */
     hal_fb_fill_rect_blend(hal_rect(r.x + r.w - radius, r.y + radius, radius, r.h - 2 * radius), c);
 
-    /* Four corner quarter-circles with blending */
     int cx, cy;
     cx = r.x + radius; cy = r.y + radius;
     for (int py = 0; py < radius; py++)
         for (int px = 0; px < radius; px++)
             if (px * px + py * py <= radius * radius)
                 hal_fb_pixel_blend(cx - radius + px, cy - radius + py, c);
-
     cx = r.x + r.w - radius - 1; cy = r.y + radius;
     for (int py = 0; py < radius; py++)
         for (int px = 0; px < radius; px++)
             if (px * px + py * py <= radius * radius)
                 hal_fb_pixel_blend(cx + radius - px, cy - radius + py, c);
-
     cx = r.x + radius; cy = r.y + r.h - radius - 1;
     for (int py = 0; py < radius; py++)
         for (int px = 0; px < radius; px++)
             if (px * px + py * py <= radius * radius)
                 hal_fb_pixel_blend(cx - radius + px, cy + radius - py, c);
-
     cx = r.x + r.w - radius - 1; cy = r.y + r.h - radius - 1;
     for (int py = 0; py < radius; py++)
         for (int px = 0; px < radius; px++)
@@ -317,9 +288,10 @@ void hal_draw_rounded_rect(hal_rect_t r, int radius, hal_color_t c)
     }
 }
 
-/* ── Circle ──────────────────────────────────────────────────── */
+/* ── Circle (GPU accelerated for filled) ────────────────────── */
 void hal_draw_circle(int cx, int cy, int radius, hal_color_t c)
 {
+    /* Outline circle — keep software (low frequency) */
     int x = 0, y = radius, d = 1 - radius;
     while (x <= y) {
         hal_fb_pixel_blend(cx + x, cy + y, c);
@@ -338,6 +310,18 @@ void hal_draw_circle(int cx, int cy, int radius, hal_color_t c)
 
 void hal_draw_filled_circle(int cx, int cy, int radius, hal_color_t c)
 {
+    uint8_t *buf = hal_fb_buffer();
+    if (buf) {
+        GPU_X_REG      = (uint32_t)cx;
+        GPU_Y_REG      = (uint32_t)cy;
+        GPU_COLOR_REG  = gpu_pack_color(c);
+        GPU_DST_REG    = (uint32_t)(uintptr_t)buf;
+        GPU_STRIDE_REG = (uint32_t)(HAL_SCREEN_W * 4);
+        GPU_RADIUS_REG = (uint32_t)radius;
+        GPU_CMD_REG    = GPU_CMD_CIRCLE_FILL;
+        return;
+    }
+
     for (int y = -radius; y <= radius; y++) {
         int w = hal_isqrt(radius * radius - y * y);
         hal_fb_hline(cx - w, cy + y, 2 * w + 1, c);
@@ -347,6 +331,19 @@ void hal_draw_filled_circle(int cx, int cy, int radius, hal_color_t c)
 void hal_draw_filled_circle_blend(int cx, int cy, int radius, hal_color_t c)
 {
     if (c.a == 255) { hal_draw_filled_circle(cx, cy, radius, c); return; }
+
+    uint8_t *buf = hal_fb_buffer();
+    if (buf) {
+        GPU_X_REG      = (uint32_t)cx;
+        GPU_Y_REG      = (uint32_t)cy;
+        GPU_COLOR_REG  = gpu_pack_color(c);
+        GPU_DST_REG    = (uint32_t)(uintptr_t)buf;
+        GPU_STRIDE_REG = (uint32_t)(HAL_SCREEN_W * 4);
+        GPU_RADIUS_REG = (uint32_t)radius;
+        GPU_CMD_REG    = GPU_CMD_CIRCLE_BLEND;
+        return;
+    }
+
     for (int y = -radius; y <= radius; y++) {
         int w = hal_isqrt(radius * radius - y * y);
         hal_fb_fill_rect_blend(hal_rect(cx - w, cy + y, 2 * w + 1, 1), c);

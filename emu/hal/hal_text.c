@@ -1,6 +1,18 @@
 #include "hal_text.h"
 #include "hal_fb.h"
 
+/* GPU MMIO registers for text rendering */
+#define GPU_MMIO_BASE     0x21100000
+#define GPU_CMD_REG       (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x00))
+#define GPU_X_REG         (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x04))
+#define GPU_Y_REG         (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x08))
+#define GPU_COLOR_REG     (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x14))
+#define GPU_DST_REG       (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x1C))
+#define GPU_STRIDE_REG    (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x20))
+#define GPU_STR_ADDR_REG  (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x28))
+#define GPU_FONT_SIZE_REG (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x2C))
+#define GPU_CMD_TEXT      5
+
 static const font_t *fonts[FONT_SIZE_COUNT];
 
 static void ensure_fonts(void)
@@ -41,13 +53,26 @@ static void render_glyph(int x, int y, char ch, hal_color_t c, const font_t *f)
 
 void hal_text(int x, int y, const char *text, hal_color_t c, hal_font_size_t size)
 {
+    /* Use GPU accelerated text rendering */
+    uint8_t *buf = hal_fb_buffer();
+    if (buf && *text) {
+        uint32_t pixel = (uint32_t)c.r | ((uint32_t)c.g << 8)
+                       | ((uint32_t)c.b << 16) | ((uint32_t)c.a << 24);
+        GPU_X_REG         = (uint32_t)x;
+        GPU_Y_REG         = (uint32_t)y;
+        GPU_COLOR_REG     = pixel;
+        GPU_DST_REG       = (uint32_t)(uintptr_t)buf;
+        GPU_STRIDE_REG    = (uint32_t)(HAL_SCREEN_W * 4);
+        GPU_STR_ADDR_REG  = (uint32_t)(uintptr_t)text;
+        GPU_FONT_SIZE_REG = (uint32_t)size;
+        GPU_CMD_REG       = GPU_CMD_TEXT;
+        return;
+    }
+
+    /* Software fallback */
     const font_t *f = hal_get_font(size);
     while (*text) {
-        if (*text == '\n') {
-            /* Skip newlines — caller should handle multi-line */
-            text++;
-            continue;
-        }
+        if (*text == '\n') { text++; continue; }
         render_glyph(x, y, *text, c, f);
         x += f->width;
         text++;
@@ -86,6 +111,8 @@ int hal_text_height(hal_font_size_t size)
 void hal_text_spaced(int x, int y, const char *text, hal_color_t c,
                       hal_font_size_t size, int extra_spacing)
 {
+    /* For spaced text, fall back to per-character rendering since
+     * the GPU text command doesn't support extra spacing */
     const font_t *f = hal_get_font(size);
     while (*text) {
         if (*text != '\n') {

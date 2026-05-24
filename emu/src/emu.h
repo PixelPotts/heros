@@ -62,12 +62,23 @@
 #define GPU_SRC_ADDR    0x18   /* source RAM address (for blit) */
 #define GPU_DST_ADDR    0x1C   /* dest RAM address (for blit) */
 #define GPU_STRIDE      0x20   /* bytes per row (for blit) */
+#define GPU_RADIUS      0x24   /* corner radius / circle radius */
+#define GPU_STR_ADDR    0x28   /* guest RAM address of string */
+#define GPU_FONT_SIZE   0x2C   /* font size enum (0/1/2) */
+#define GPU_X1          0x30   /* line endpoint x1 */
+#define GPU_Y1          0x34   /* line endpoint y1 */
 
 /* GPU commands */
 #define GPU_CMD_FILL      1    /* fill rect in backbuffer */
 #define GPU_CMD_COPY      2    /* memcpy src→dst, length = W */
 #define GPU_CMD_FILL_BUF  3   /* fill rect in RAM buffer */
 #define GPU_CMD_BLEND_BUF 4   /* alpha-blend fill rect in RAM buffer */
+#define GPU_CMD_TEXT        5   /* render text string */
+#define GPU_CMD_RRECT_FILL  6   /* filled rounded rect */
+#define GPU_CMD_RRECT_BLEND 7   /* alpha-blend filled rounded rect */
+#define GPU_CMD_CIRCLE_FILL 8   /* filled circle */
+#define GPU_CMD_CIRCLE_BLEND 9  /* alpha-blend filled circle */
+#define GPU_CMD_LINE        10  /* Bresenham line */
 
 /* ── Framebuffer control offsets ────────────────────────────────── */
 #define FB_CTRL_WIDTH   0x00

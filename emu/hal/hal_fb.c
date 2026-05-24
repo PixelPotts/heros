@@ -13,9 +13,20 @@
 #define GPU_SRC_REG     (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x18))
 #define GPU_DST_REG     (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x1C))
 #define GPU_STRIDE_REG  (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x20))
+#define GPU_RADIUS_REG  (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x24))
+#define GPU_STR_ADDR_REG (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x28))
+#define GPU_FONT_SIZE_REG (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x2C))
+#define GPU_X1_REG      (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x30))
+#define GPU_Y1_REG      (*(volatile uint32_t *)(GPU_MMIO_BASE + 0x34))
 
-#define GPU_CMD_FILL_BUF  3
-#define GPU_CMD_BLEND_BUF 4
+#define GPU_CMD_FILL_BUF    3
+#define GPU_CMD_BLEND_BUF   4
+#define GPU_CMD_TEXT         5
+#define GPU_CMD_RRECT_FILL  6
+#define GPU_CMD_RRECT_BLEND 7
+#define GPU_CMD_CIRCLE_FILL 8
+#define GPU_CMD_CIRCLE_BLEND 9
+#define GPU_CMD_LINE        10
 
 void hal_fb_init(void)
 {

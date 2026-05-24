@@ -256,31 +256,31 @@ void cpu_step(cpu_t *cpu)
 
         switch (funct3) {
         case F3_LB: {
-            uint8_t val = bus_read8(addr, &br);
+            uint8_t val = bus_read8_fast(addr, cpu->ram_ptr, &br);
             if (br.exception) { trap(cpu, br.exception, addr); return; }
             if (rd) cpu->x[rd] = (uint32_t)(int32_t)(int8_t)val;
             break;
         }
         case F3_LH: {
-            uint16_t val = bus_read16(addr, &br);
+            uint16_t val = bus_read16_fast(addr, cpu->ram_ptr, &br);
             if (br.exception) { trap(cpu, br.exception, addr); return; }
             if (rd) cpu->x[rd] = (uint32_t)(int32_t)(int16_t)val;
             break;
         }
         case F3_LW: {
-            uint32_t val = bus_read32(addr, &br);
+            uint32_t val = bus_read32_fast(addr, cpu->ram_ptr, &br);
             if (br.exception) { trap(cpu, br.exception, addr); return; }
             if (rd) cpu->x[rd] = val;
             break;
         }
         case F3_LBU: {
-            uint8_t val = bus_read8(addr, &br);
+            uint8_t val = bus_read8_fast(addr, cpu->ram_ptr, &br);
             if (br.exception) { trap(cpu, br.exception, addr); return; }
             if (rd) cpu->x[rd] = val;
             break;
         }
         case F3_LHU: {
-            uint16_t val = bus_read16(addr, &br);
+            uint16_t val = bus_read16_fast(addr, cpu->ram_ptr, &br);
             if (br.exception) { trap(cpu, br.exception, addr); return; }
             if (rd) cpu->x[rd] = val;
             break;
@@ -301,13 +301,13 @@ void cpu_step(cpu_t *cpu)
 
         switch (funct3) {
         case F3_SB:
-            bus_write8(addr, (uint8_t)val, &br);
+            bus_write8_fast(addr, (uint8_t)val, cpu->ram_ptr, &br);
             break;
         case F3_SH:
-            bus_write16(addr, (uint16_t)val, &br);
+            bus_write16_fast(addr, (uint16_t)val, cpu->ram_ptr, &br);
             break;
         case F3_SW:
-            bus_write32(addr, val, &br);
+            bus_write32_fast(addr, val, cpu->ram_ptr, &br);
             break;
         default:
             trap(cpu, CAUSE_ILLEGAL_INSN, insn);
