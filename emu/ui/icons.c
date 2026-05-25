@@ -145,6 +145,18 @@ static void icon_clock(int x, int y, int s, Color c)
     draw_line(cx, cy, cx + s/5, cy, c);
 }
 
+static void icon_image(int x, int y, int s, Color c)
+{
+    /* Image: frame with mountain + sun */
+    draw_rect(RECT(x + s/8, y + s/8, s*3/4, s*3/4), c);
+    /* Mountain */
+    draw_line(x + s/4, y + s*5/8, x + s/2, y + s*3/8, c);
+    draw_line(x + s/2, y + s*3/8, x + s*3/4, y + s*5/8, c);
+    draw_line(x + s/4, y + s*5/8, x + s*3/4, y + s*5/8, c);
+    /* Sun */
+    draw_filled_rect(RECT(x + s*5/8, y + s/4, s/8, s/8), c);
+}
+
 typedef void (*icon_fn_t)(int x, int y, int s, Color c);
 
 static const icon_fn_t icon_fns[ICON_COUNT] = {
@@ -164,6 +176,7 @@ static const icon_fn_t icon_fns[ICON_COUNT] = {
     [ICON_WIFI]      = icon_wifi,
     [ICON_BATTERY]   = icon_battery,
     [ICON_CLOCK]     = icon_clock,
+    [ICON_IMAGE]     = icon_image,
 };
 
 void icon_draw(IconId id, int x, int y, int size, Color c)
