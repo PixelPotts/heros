@@ -48,6 +48,7 @@ HAL_SRC = hal/hal_fb.c \
           hal/hal_time.c \
           hal/hal_mem.c \
           hal/hal_fs.c \
+          hal/hal_image.c \
           hal/font_data.c
 
 # ─── UI sources ─────────────────────────────────────────────────
@@ -68,7 +69,8 @@ UI_SRC  = ui/theme.c \
           ui/apps/terminal.c \
           ui/apps/filemanager.c \
           ui/apps/settings.c \
-          ui/apps/taskmanager.c
+          ui/apps/taskmanager.c \
+          ui/apps/imageviewer.c
 
 ALL_RV_SRC = $(KERN_SRC) $(HAL_SRC) $(UI_SRC)
 
@@ -76,8 +78,15 @@ KERN_ELF = kernel.elf
 KERN_BIN = kernel.bin
 
 # ─── Disk image ─────────────────────────────────────────────────
-DISK_IMG = disk.img
-MKFAT16  = tools/mkfat16
+DISK_IMG    = disk.img
+MKFAT16     = tools/mkfat16
+INJECT_FILE = tools/inject_file
+MKTEST_IMGS = tools/mktest_images
+TEST_IMG_DIR = /tmp/heros-test-images
+
+# Test image files
+TEST_IMAGES = red.bmp green.png blue.jpg gradient.bmp checker.png \
+              stripes.tga rgbtest.bmp heros.png mandel.bmp landscap.jpg
 
 # ─── Old test kernel ────────────────────────────────────────────
 TEST_SRC = test/boot.S test/kernel.c
@@ -104,9 +113,22 @@ $(KERN_BIN): $(KERN_ELF)
 $(MKFAT16): tools/mkfat16.c
 	$(CC) -O2 -Wall -o $@ $<
 
-# Disk image
-$(DISK_IMG): $(MKFAT16)
+# inject_file tool
+$(INJECT_FILE): tools/inject_file.c
+	$(CC) -O2 -Wall -o $@ $<
+
+# mktest_images tool
+$(MKTEST_IMGS): tools/mktest_images.c vendor/stb_image_write.h
+	$(CC) -O2 -Wall -Wno-unused-result -o $@ $< -lm
+
+# Disk image with test images
+$(DISK_IMG): $(MKFAT16) $(INJECT_FILE) $(MKTEST_IMGS)
 	./$(MKFAT16) $@ 8
+	mkdir -p $(TEST_IMG_DIR)
+	./$(MKTEST_IMGS) $(TEST_IMG_DIR)
+	@for img in $(TEST_IMAGES); do \
+		./$(INJECT_FILE) $@ $(TEST_IMG_DIR)/$$img /test-img/$$img; \
+	done
 
 # Old test kernel (for testing emulator changes independently)
 test: $(EMU_BIN) $(TEST_BIN)
@@ -126,6 +148,8 @@ run-test: test
 	./$(EMU_BIN) $(TEST_BIN)
 
 clean:
-	rm -f $(EMU_BIN) $(KERN_ELF) $(KERN_BIN) $(TEST_ELF) $(TEST_BIN) $(MKFAT16) $(DISK_IMG)
+	rm -f $(EMU_BIN) $(KERN_ELF) $(KERN_BIN) $(TEST_ELF) $(TEST_BIN)
+	rm -f $(MKFAT16) $(INJECT_FILE) $(MKTEST_IMGS) $(DISK_IMG)
+	rm -rf $(TEST_IMG_DIR)
 
 .PHONY: all test run run-test clean
