@@ -1,12 +1,16 @@
 /*
  * hal_image.c — Image decoding via stb_image (bare-metal config)
+ *
+ * stb_image.h includes <stdlib.h> and <string.h> which don't exist
+ * in our freestanding environment.  We pre-include our own headers
+ * and define guards so the #includes inside stb become no-ops.
  */
 #include "hal_image.h"
 #include "hal_mem.h"
 #include "hal_fs.h"
 #include "../kernel/string.h"
 
-/* ── Bare-metal shims for stb_image ──────────────────────────── */
+/* abs() — used by BMP loader (stb_image calls abs() for BMP row order) */
 static int abs(int x) { return x < 0 ? -x : x; }
 
 /* ── stb_image configuration ────────────────────────────────── */

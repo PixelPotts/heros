@@ -67,10 +67,10 @@ static void invalidate_scaled(ImgViewData *iv)
 static void iv_render(AppContent *self, Rect cr)
 {
     ImgViewData *iv = (ImgViewData *)self->data;
-    const ThemeColors *tc = theme_current();
+    const ThemeColors *tc = theme_colors();
 
     /* Background */
-    draw_filled_rect(cr, tc->bg_secondary);
+    draw_filled_rect(cr, tc->window_bg);
 
     int view_w = cr.w;
     int view_h = cr.h - IV_STATUS_H;
@@ -181,28 +181,21 @@ static void iv_on_key_down(AppContent *self, uint16_t key, uint16_t mod)
     ImgViewData *iv = (ImgViewData *)self->data;
     if (!iv->loaded) return;
 
-    switch (key) {
-    case 'f': case 'F':
+    if (key == 'f' || key == 'F') {
         iv->zoom = ZOOM_FIT;
         iv->pan_x = iv->pan_y = 0;
         invalidate_scaled(iv);
-        break;
-    case '1':
+    } else if (key == '1') {
         iv->zoom = ZOOM_100;
         iv->pan_x = iv->pan_y = 0;
-        break;
-    case 0x4000004F: /* RIGHT */
+    } else if (key == HAL_KEY_RIGHT) {
         if (iv->zoom == ZOOM_100) iv->pan_x += IV_PAN_STEP;
-        break;
-    case 0x40000050: /* LEFT */
+    } else if (key == HAL_KEY_LEFT) {
         if (iv->zoom == ZOOM_100) iv->pan_x -= IV_PAN_STEP;
-        break;
-    case 0x40000051: /* DOWN */
+    } else if (key == HAL_KEY_DOWN) {
         if (iv->zoom == ZOOM_100) iv->pan_y += IV_PAN_STEP;
-        break;
-    case 0x40000052: /* UP */
+    } else if (key == HAL_KEY_UP) {
         if (iv->zoom == ZOOM_100) iv->pan_y -= IV_PAN_STEP;
-        break;
     }
 }
 

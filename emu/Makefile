@@ -15,7 +15,8 @@ RV_MABI    = ilp32
 RV_CFLAGS  = -march=$(RV_MARCH) -mabi=$(RV_MABI) \
              -nostdlib -nostartfiles -ffreestanding \
              -O2 -Wall -Wextra \
-             -Ikernel -Ihal -Iui
+             -Ihal/stubs -Ikernel -Ihal -Iui
+RV_LIBGCC  = $(shell $(RV_CC) -march=$(RV_MARCH) -mabi=$(RV_MABI) -print-libgcc-file-name)
 RV_LDFLAGS = -march=$(RV_MARCH) -mabi=$(RV_MABI) \
              -nostdlib -T kernel/linker.ld
 
@@ -103,7 +104,7 @@ $(EMU_BIN): $(EMU_SRC) $(wildcard src/*.h)
 
 # HerOS kernel (RISC-V binary)
 $(KERN_ELF): $(ALL_RV_SRC) kernel/linker.ld $(wildcard kernel/*.h hal/*.h ui/*.h ui/apps/*.h)
-	$(RV_CC) $(RV_CFLAGS) $(RV_LDFLAGS) -o $@ $(ALL_RV_SRC)
+	$(RV_CC) $(RV_CFLAGS) $(RV_LDFLAGS) -o $@ $(ALL_RV_SRC) $(RV_LIBGCC)
 
 $(KERN_BIN): $(KERN_ELF)
 	$(RV_OBJCOPY) -O binary $< $@
