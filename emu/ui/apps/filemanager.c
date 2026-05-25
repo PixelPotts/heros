@@ -418,38 +418,61 @@ static void fm_clip_copy(FMData *fm, int cut)
     show_toast(fm, cut ? "Cut to clipboard" : "Copied to clipboard");
 }
 
+static void fm_copy_file(const char *src_path, const char *dst_path)
+{
+    int src_fd = hal_fs_open(src_path, FS_O_READ);
+    if (src_fd < 0) return;
+
+    int dst_fd = hal_fs_open(dst_path, FS_O_CREATE | FS_O_WRITE);
+    if (dst_fd < 0) { hal_fs_close(src_fd); return; }
+
+    char buf[512];
+    int n;
+    while ((n = hal_fs_read(src_fd, buf, sizeof(buf))) > 0)
+        hal_fs_write(dst_fd, buf, n);
+
+    hal_fs_close(src_fd);
+    hal_fs_close(dst_fd);
+}
+
 static void fm_clip_paste(FMData *fm)
 {
     if (fm->clip_count <= 0) return;
 
     int ok = 0;
     for (int i = 0; i < fm->clip_count; i++) {
-        /* For cut: unlink source (move = rename if same dir) */
-        if (fm->clip_cut) {
-            /* Extract just the filename */
-            const char *name = strrchr(fm->clip_paths[i], '/');
-            if (name) name++;
-            else name = fm->clip_paths[i];
+        const char *name = strrchr(fm->clip_paths[i], '/');
+        if (name) name++;
+        else name = fm->clip_paths[i];
 
-            char dest[256];
-            build_path(fm->cwd, name, dest);
+        char dest[256];
+        build_path(fm->cwd, name, dest);
+
+        if (fm->clip_cut) {
             if (hal_fs_rename(fm->clip_paths[i], dest) == 0)
                 ok++;
+        } else {
+            /* Copy: read source file, write to destination */
+            fs_stat_t st;
+            if (hal_fs_stat(fm->clip_paths[i], &st) == 0 &&
+                st.type == FS_TYPE_FILE) {
+                fm_copy_file(fm->clip_paths[i], dest);
+                ok++;
+            }
         }
-        /* Copy not fully supported (would need fs_read + fs_write + cluster alloc) */
     }
-    if (fm->clip_cut) {
+
+    char msg[64];
+    strcpy(msg, fm->clip_cut ? "Moved " : "Copied ");
+    char num[8];
+    itoa(ok, num, 10);
+    strcat(msg, num);
+    strcat(msg, " item(s)");
+    show_toast(fm, msg);
+
+    if (fm->clip_cut)
         fm->clip_count = 0;
-        char msg[64];
-        strcpy(msg, "Moved ");
-        char num[8];
-        itoa(ok, num, 10);
-        strcat(msg, num);
-        strcat(msg, " item(s)");
-        show_toast(fm, msg);
-    } else {
-        show_toast(fm, "Copy not yet supported");
-    }
+
     fm_load(fm);
 }
 
@@ -481,23 +504,21 @@ static int ctx_height(const FMData *fm)
 
 static void build_ctx_file(FMData *fm)
 {
-    int in_root = (strcmp(fm->cwd, "/") == 0);
     fm->ctx_n = 0;
     ctx_add(fm, "Open",       "Enter",  ACT_OPEN,    1, 0, 0);
     ctx_add(fm, "Cut",        "Ctrl+X", ACT_CUT,     1, 1, 0);
     ctx_add(fm, "Copy",       "Ctrl+C", ACT_COPY,    1, 0, 0);
     ctx_add(fm, "Paste",      "Ctrl+V", ACT_PASTE,   fm->clip_count > 0, 0, 0);
-    ctx_add(fm, "Rename",     "F2",     ACT_RENAME,  in_root, 1, 0);
-    ctx_add(fm, "Delete",     "Del",    ACT_DELETE,  in_root, 0, 1);
+    ctx_add(fm, "Rename",     "F2",     ACT_RENAME,  1, 1, 0);
+    ctx_add(fm, "Delete",     "Del",    ACT_DELETE,  1, 0, 1);
     ctx_add(fm, "Properties", "",       ACT_PROPS,   1, 1, 0);
 }
 
 static void build_ctx_bg(FMData *fm)
 {
-    int in_root = (strcmp(fm->cwd, "/") == 0);
     fm->ctx_n = 0;
-    ctx_add(fm, "New File",   "Ctrl+N",   ACT_NEWFILE,   in_root, 0, 0);
-    ctx_add(fm, "New Folder", "Ctrl+Sh+N", ACT_NEWFOLDER, in_root, 0, 0);
+    ctx_add(fm, "New File",   "Ctrl+N",   ACT_NEWFILE,   1, 0, 0);
+    ctx_add(fm, "New Folder", "Ctrl+Sh+N", ACT_NEWFOLDER, 1, 0, 0);
     ctx_add(fm, "Paste",      "Ctrl+V",   ACT_PASTE,     fm->clip_count > 0, 1, 0);
     ctx_add(fm, "Select All", "Ctrl+A",   ACT_SELECTALL, 1, 0, 0);
     ctx_add(fm, "Refresh",    "F5",       ACT_REFRESH,   1, 1, 0);
@@ -510,7 +531,6 @@ static void build_ctx_bg(FMData *fm)
 static void ctx_exec(FMData *fm, int action)
 {
     fm->ctx_vis = 0;
-    int in_root = (strcmp(fm->cwd, "/") == 0);
 
     switch (action) {
     case ACT_OPEN:
@@ -532,7 +552,7 @@ static void ctx_exec(FMData *fm, int action)
         fm->dlg_cur = 9;
         break;
     case ACT_RENAME:
-        if (fm->selected >= 0 && in_root) {
+        if (fm->selected >= 0) {
             const fs_dirent_t *e = &fm->entries[fm->view[fm->selected]];
             fm->dlg = DLG_RENAME;
             strcpy(fm->dlg_title, "Rename");
@@ -542,7 +562,7 @@ static void ctx_exec(FMData *fm, int action)
         }
         break;
     case ACT_DELETE:
-        if (fm->sel_count > 0 && in_root) {
+        if (fm->sel_count > 0) {
             fm->dlg = DLG_DELETE;
             strcpy(fm->dlg_title, "Delete");
             if (fm->sel_count == 1 && fm->selected >= 0) {
@@ -1421,7 +1441,6 @@ static void fm_on_mouse_down(AppContent *self, int x, int y)
 {
     FMData *fm = (FMData *)self->data;
     int btn = wm_last_mouse_button();
-    int in_root = (strcmp(fm->cwd, "/") == 0);
 
     /* ── Dialog is open ───────────────────────────────────────── */
     if (fm->dlg != DLG_NONE) {
@@ -1655,7 +1674,6 @@ static void fm_on_mouse_down(AppContent *self, int x, int y)
             clear_selection(fm);
         }
     }
-    (void)in_root;
 }
 
 /*──────────────────────────────────────────────────────────────────
@@ -1664,7 +1682,6 @@ static void fm_on_mouse_down(AppContent *self, int x, int y)
 static void fm_on_key_down(AppContent *self, uint16_t key, uint16_t mod)
 {
     FMData *fm = (FMData *)self->data;
-    int in_root = (strcmp(fm->cwd, "/") == 0);
 
     /* ── Dialog mode ──────────────────────────────────────────── */
     if (fm->dlg != DLG_NONE) {
@@ -1732,23 +1749,19 @@ static void fm_on_key_down(AppContent *self, uint16_t key, uint16_t mod)
 
     /* Ctrl+N = new file */
     if (key == HAL_KEY_N && (mod & HAL_MOD_CTRL) && !(mod & HAL_MOD_SHIFT)) {
-        if (in_root) {
-            fm->dlg = DLG_NEWFILE;
-            strcpy(fm->dlg_title, "New File");
-            strcpy(fm->dlg_buf, "NEWFILE.TXT");
-            fm->dlg_cur = 7;
-        }
+        fm->dlg = DLG_NEWFILE;
+        strcpy(fm->dlg_title, "New File");
+        strcpy(fm->dlg_buf, "NEWFILE.TXT");
+        fm->dlg_cur = 7;
         return;
     }
 
     /* Ctrl+Shift+N = new folder */
     if (key == HAL_KEY_N && (mod & HAL_MOD_CTRL) && (mod & HAL_MOD_SHIFT)) {
-        if (in_root) {
-            fm->dlg = DLG_NEWFOLDER;
-            strcpy(fm->dlg_title, "New Folder");
-            strcpy(fm->dlg_buf, "NEWFOLDER");
-            fm->dlg_cur = 9;
-        }
+        fm->dlg = DLG_NEWFOLDER;
+        strcpy(fm->dlg_title, "New Folder");
+        strcpy(fm->dlg_buf, "NEWFOLDER");
+        fm->dlg_cur = 9;
         return;
     }
 
@@ -1777,7 +1790,7 @@ static void fm_on_key_down(AppContent *self, uint16_t key, uint16_t mod)
     }
 
     /* F2 = rename */
-    if (key == HAL_KEY_F2 && fm->selected >= 0 && in_root) {
+    if (key == HAL_KEY_F2 && fm->selected >= 0) {
         const fs_dirent_t *e = &fm->entries[fm->view[fm->selected]];
         if (strcmp(e->name, "..") != 0) {
             fm->dlg = DLG_RENAME;
@@ -1790,7 +1803,7 @@ static void fm_on_key_down(AppContent *self, uint16_t key, uint16_t mod)
     }
 
     /* Delete key */
-    if (key == HAL_KEY_DELETE && fm->sel_count > 0 && in_root) {
+    if (key == HAL_KEY_DELETE && fm->sel_count > 0) {
         ctx_exec(fm, ACT_DELETE);
         return;
     }
