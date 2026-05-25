@@ -8,7 +8,9 @@
 #include "../../kernel/string.h"
 #include "../../kernel/mm.h"
 #include "../../hal/hal_fs.h"
+#include "../../hal/hal_image.h"
 #include "terminal.h"
+#include "imageviewer.h"
 
 /*──────────────────────────────────────────────────────────────────
  * Layout constants
@@ -132,6 +134,10 @@ typedef struct {
     char        toast_msg[64];
     uint32_t    toast_time;
 
+    /* Image preview cache */
+    hal_image_t preview_thumb;
+    int         preview_for_idx;   /* view index, -1 = none */
+
     /* Cached content dimensions */
     int         cw, ch;
 } FMData;
@@ -187,6 +193,14 @@ static const char *ftype_str(const fs_dirent_t *e)
     if (strcmp(dot, ".cfg") == 0) return "Config";
     if (strcmp(dot, ".tar") == 0) return "Archive";
     if (strcmp(dot, ".gz") == 0)  return "Archive";
+    if (strcmp(dot, ".bmp") == 0)  return "BMP Image";
+    if (strcmp(dot, ".png") == 0)  return "PNG Image";
+    if (strcmp(dot, ".jpg") == 0)  return "JPEG Image";
+    if (strcmp(dot, ".jpeg") == 0) return "JPEG Image";
+    if (strcmp(dot, ".gif") == 0)  return "GIF Image";
+    if (strcmp(dot, ".tga") == 0)  return "TGA Image";
+    if (strcmp(dot, ".psd") == 0)  return "PSD Image";
+    if (strcmp(dot, ".ppm") == 0)  return "PPM Image";
     return "File";
 }
 
@@ -214,6 +228,9 @@ static void clear_selection(FMData *fm)
     memset(fm->sel_flags, 0, sizeof(fm->sel_flags));
     fm->sel_count = 0;
     fm->selected = -1;
+    /* Invalidate image preview cache */
+    hal_image_free(&fm->preview_thumb);
+    fm->preview_for_idx = -1;
 }
 
 static void select_single(FMData *fm, int vi)
@@ -397,6 +414,11 @@ static int is_text_file(const char *name)
     return 0;
 }
 
+static int is_image_file(const char *name)
+{
+    return hal_image_is_supported(name);
+}
+
 static void fm_open_selected(FMData *fm)
 {
     if (fm->selected < 0 || fm->selected >= fm->view_count) return;
@@ -413,6 +435,21 @@ static void fm_open_selected(FMData *fm)
             build_path(fm->cwd, e->name, path);
         }
         fm_navigate(fm, path);
+        return;
+    }
+
+    /* Image file → open in image viewer */
+    if (is_image_file(e->name)) {
+        char full[256];
+        build_path(fm->cwd, e->name, full);
+        AppContent *content = imageviewer_create_with_file(full);
+        if (content) {
+            char title[64];
+            strncpy(title, e->name, 63);
+            title[63] = '\0';
+            wm_open(title, 100, 60, 520, 400,
+                    WIN_CLOSABLE | WIN_RESIZABLE, -1, content);
+        }
         return;
     }
 
@@ -993,7 +1030,11 @@ static void r_filelist(FMData *fm, Rect cr, const ThemeColors *tc, int mx, int m
         Color ic = is_up ? tc->text_muted :
                    is_dir ? tc->accent : tc->text_secondary;
         if (is_cut) ic = COLOR(ic.r, ic.g, ic.b, 100);
-        icon_draw(is_dir ? ICON_FOLDER : ICON_FILE, x + 4, ry + 3, 14, ic);
+        {
+            int fimg = !is_dir && is_image_file(e->name);
+            IconId fid = is_dir ? ICON_FOLDER : (fimg ? ICON_IMAGE : ICON_FILE);
+            icon_draw(fid, x + 4, ry + 3, 14, ic);
+        }
 
         /* Name */
         Color nc = sel ? COLOR_WHITE : tc->text_primary;
@@ -1072,8 +1113,11 @@ static void r_gridview(FMData *fm, Rect cr, const ThemeColors *tc, int mx, int m
 
         /* Large icon */
         Color ic = is_dir ? tc->accent : tc->text_secondary;
-        icon_draw(is_dir ? ICON_FOLDER : ICON_FILE,
-                  cx + (GRID_CELL_W - 4) / 2 - 12, cy + 8, 24, ic);
+        {
+            int gimg = !is_dir && is_image_file(e->name);
+            IconId gid = is_dir ? ICON_FOLDER : (gimg ? ICON_IMAGE : ICON_FILE);
+            icon_draw(gid, cx + (GRID_CELL_W - 4) / 2 - 12, cy + 8, 24, ic);
+        }
 
         /* Name (truncated) */
         char name[12];
@@ -1115,9 +1159,10 @@ static void r_preview(FMData *fm, Rect cr, const ThemeColors *tc)
         int is_dir = (e->type == FS_TYPE_DIR);
 
         /* Icon */
+        int is_img = !is_dir && is_image_file(e->name);
+        IconId iid = is_dir ? ICON_FOLDER : (is_img ? ICON_IMAGE : ICON_FILE);
         Color ic = is_dir ? tc->accent : tc->text_secondary;
-        icon_draw(is_dir ? ICON_FOLDER : ICON_FILE,
-                  px + pw / 2 - 16, y, 32, ic);
+        icon_draw(iid, px + pw / 2 - 16, y, 32, ic);
         y += 40;
 
         /* Name */
@@ -1199,6 +1244,62 @@ static void r_preview(FMData *fm, Rect cr, const ThemeColors *tc)
                         }
                     }
                 }
+            }
+        }
+
+        /* Preview thumbnail for image files */
+        if (is_img && e->size > 0) {
+            widget_separator(px + 10, y, pw - 20);
+            y += 10;
+
+            /* Cache thumbnail — only decode when selection changes */
+            if (fm->preview_for_idx != fm->selected) {
+                hal_image_free(&fm->preview_thumb);
+                fm->preview_for_idx = -1;
+
+                char full_path[256];
+                build_path(fm->cwd, e->name, full_path);
+                hal_image_t full;
+                if (hal_image_load(full_path, &full) == 0) {
+                    /* Scale to fit ~140x100 */
+                    int tw = 140, th = 100;
+                    int sw = tw * 1000 / full.width;
+                    int sh = th * 1000 / full.height;
+                    int s = sw < sh ? sw : sh;
+                    if (s > 1000) s = 1000;
+                    int nw = full.width * s / 1000;
+                    int nh = full.height * s / 1000;
+                    if (nw < 1) nw = 1;
+                    if (nh < 1) nh = 1;
+                    if (nw == full.width && nh == full.height) {
+                        fm->preview_thumb = full;
+                    } else {
+                        hal_image_scale(&full, nw, nh, &fm->preview_thumb);
+                        hal_image_free(&full);
+                    }
+                    fm->preview_for_idx = fm->selected;
+                }
+            }
+
+            if (fm->preview_thumb.pixels) {
+                int tx = px + (pw - fm->preview_thumb.width) / 2;
+                hal_fb_blit(tx, y, fm->preview_thumb.width,
+                           fm->preview_thumb.height,
+                           fm->preview_thumb.pixels,
+                           fm->preview_thumb.width * 4);
+                y += fm->preview_thumb.height + 4;
+
+                /* Show dimensions */
+                char dbuf[32], wbuf[12], hbuf[12];
+                hal_image_t full_tmp;
+                build_path(fm->cwd, e->name, dbuf);
+                /* Use cached original size — re-stat */
+                itoa((int)e->size, wbuf, 10);
+                strcpy(dbuf, wbuf);
+                strcat(dbuf, " B");
+                draw_text_centered(px + pw / 2, y, dbuf,
+                                  tc->text_muted, FONT_SIZE_SMALL);
+                (void)full_tmp; (void)hbuf;
             }
         }
     } else if (fm->sel_count > 1) {
@@ -2002,7 +2103,11 @@ static void fm_on_scroll(AppContent *self, int x, int y, int sy)
  *────────────────────────────────────────────────────────────────*/
 static void fm_destroy(AppContent *self)
 {
-    if (self->data) kfree(self->data);
+    if (self->data) {
+        FMData *fm = (FMData *)self->data;
+        hal_image_free(&fm->preview_thumb);
+        kfree(self->data);
+    }
     kfree(self);
 }
 
@@ -2022,6 +2127,7 @@ AppContent *filemanager_create(void)
     fm->dbl_item = -1;
     fm->ctx_target = -1;
     fm->sel_anchor = -1;
+    fm->preview_for_idx = -1;
     fm->cw = 498;
     fm->ch = 321;
 
