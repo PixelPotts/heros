@@ -15,6 +15,8 @@
 #define MAX_HISTORY  16
 #define CHAR_W       6
 #define CHAR_H       10
+#define ED_ROWS      22       /* visible editor lines (rows 1-22) */
+#define ED_BUF_INIT  8192     /* initial editor buffer size */
 
 typedef struct {
     char     screen[TERM_ROWS][TERM_COLS + 1];
@@ -29,6 +31,18 @@ typedef struct {
     char     history[MAX_HISTORY][MAX_INPUT];
     int      history_count;
     int      history_idx;
+    /* Editor (nano) state */
+    int      ed_active;
+    char    *ed_buf;
+    int      ed_cap;
+    int      ed_len;
+    int      ed_cx, ed_cy;
+    int      ed_scroll;
+    char     ed_file[256];
+    int      ed_dirty;
+    int      ed_nlines;
+    char     ed_status[80];
+    uint32_t ed_status_time;
 } TermData;
 
 static void term_clear_screen(TermData *td)
@@ -105,6 +119,7 @@ static void cmd_help(TermData *td)
     term_puts(td, "  wc <file>      Word/line/byte count\n");
     term_puts(td, "  stat <path>    File info\n");
     term_puts(td, "  touch <file>   Create empty file\n");
+    term_puts(td, "  nano <file>    Text editor\n");
     term_puts(td, "  write <f> <t>  Write text to file\n");
     term_puts(td, "  mkdir <dir>    Create directory\n");
     term_puts(td, "  rm <file>      Delete file\n");
@@ -750,6 +765,435 @@ static void cmd_head(TermData *td, const char *args)
     hal_fs_close(fd);
 }
 
+/* ── Nano editor helpers ─────────────────────────────────────── */
+
+static int ed_count_lines(const char *buf, int len)
+{
+    int n = 1;
+    for (int i = 0; i < len; i++)
+        if (buf[i] == '\n') n++;
+    return n;
+}
+
+/* Return byte offset of start of line N (0-based) */
+static int ed_line_start(const char *buf, int len, int line)
+{
+    if (line == 0) return 0;
+    int cur = 0;
+    for (int i = 0; i < len; i++) {
+        if (buf[i] == '\n') {
+            cur++;
+            if (cur == line) return i + 1;
+        }
+    }
+    return len;
+}
+
+/* Length of line at given byte offset (not counting \n) */
+static int ed_line_len(const char *buf, int len, int off)
+{
+    int l = 0;
+    while (off + l < len && buf[off + l] != '\n')
+        l++;
+    return l;
+}
+
+/* Ensure buffer has room for `need` more bytes */
+static void ed_grow(TermData *td, int need)
+{
+    while (td->ed_len + need >= td->ed_cap) {
+        int newcap = td->ed_cap * 2;
+        char *nb = (char *)kmalloc(newcap);
+        if (!nb) return;
+        memcpy(nb, td->ed_buf, td->ed_len);
+        kfree(td->ed_buf);
+        td->ed_buf = nb;
+        td->ed_cap = newcap;
+    }
+}
+
+static void ed_set_status(TermData *td, const char *msg)
+{
+    strncpy(td->ed_status, msg, 79);
+    td->ed_status[79] = '\0';
+    td->ed_status_time = hal_get_ticks();
+}
+
+/* Get cursor byte offset in buffer */
+static int ed_cursor_off(TermData *td)
+{
+    int off = ed_line_start(td->ed_buf, td->ed_len, td->ed_cy);
+    int ll = ed_line_len(td->ed_buf, td->ed_len, off);
+    int cx = td->ed_cx;
+    if (cx > ll) cx = ll;
+    return off + cx;
+}
+
+static void ed_insert_char(TermData *td, char ch)
+{
+    ed_grow(td, 1);
+    int pos = ed_cursor_off(td);
+    memmove(td->ed_buf + pos + 1, td->ed_buf + pos, td->ed_len - pos);
+    td->ed_buf[pos] = ch;
+    td->ed_len++;
+    if (ch == '\n') {
+        td->ed_cy++;
+        td->ed_cx = 0;
+        td->ed_nlines++;
+    } else {
+        td->ed_cx++;
+    }
+    td->ed_dirty = 1;
+}
+
+static void ed_delete_char(TermData *td)
+{
+    int pos = ed_cursor_off(td);
+    if (pos >= td->ed_len) return;
+    if (td->ed_buf[pos] == '\n')
+        td->ed_nlines--;
+    memmove(td->ed_buf + pos, td->ed_buf + pos + 1, td->ed_len - pos - 1);
+    td->ed_len--;
+    td->ed_dirty = 1;
+}
+
+static void ed_backspace(TermData *td)
+{
+    if (td->ed_cx == 0 && td->ed_cy == 0) return;
+    if (td->ed_cx > 0) {
+        td->ed_cx--;
+        ed_delete_char(td);
+    } else {
+        /* Merge with previous line */
+        td->ed_cy--;
+        int off = ed_line_start(td->ed_buf, td->ed_len, td->ed_cy);
+        int ll = ed_line_len(td->ed_buf, td->ed_len, off);
+        td->ed_cx = ll;
+        ed_delete_char(td);  /* delete the \n at end of prev line */
+    }
+}
+
+static void ed_cut_line(TermData *td)
+{
+    int off = ed_line_start(td->ed_buf, td->ed_len, td->ed_cy);
+    int ll = ed_line_len(td->ed_buf, td->ed_len, off);
+    int del = ll;
+    /* Also delete the trailing \n if present */
+    if (off + ll < td->ed_len && td->ed_buf[off + ll] == '\n')
+        del++;
+    if (del == 0) return;
+    memmove(td->ed_buf + off, td->ed_buf + off + del, td->ed_len - off - del);
+    td->ed_len -= del;
+    td->ed_nlines = ed_count_lines(td->ed_buf, td->ed_len);
+    /* Adjust cursor */
+    if (td->ed_cy >= td->ed_nlines && td->ed_cy > 0)
+        td->ed_cy--;
+    td->ed_cx = 0;
+    td->ed_dirty = 1;
+    ed_set_status(td, "Line cut");
+}
+
+static void ed_save(TermData *td)
+{
+    int fd = hal_fs_open(td->ed_file, FS_O_CREATE | FS_O_WRITE | FS_O_TRUNC);
+    if (fd < 0) {
+        ed_set_status(td, "Error: cannot save file");
+        return;
+    }
+    if (td->ed_len > 0)
+        hal_fs_write(fd, td->ed_buf, td->ed_len);
+    hal_fs_close(fd);
+    td->ed_dirty = 0;
+    char msg[80];
+    strcpy(msg, "Saved ");
+    char num[16];
+    itoa(td->ed_len, num, 10);
+    strcat(msg, num);
+    strcat(msg, " bytes");
+    ed_set_status(td, msg);
+}
+
+static void ed_close(TermData *td)
+{
+    if (td->ed_buf) {
+        kfree(td->ed_buf);
+        td->ed_buf = (void *)0;
+    }
+    td->ed_active = 0;
+    td->ed_len = 0;
+    td->ed_cap = 0;
+}
+
+static void ed_clamp_cursor(TermData *td)
+{
+    if (td->ed_cy < 0) td->ed_cy = 0;
+    if (td->ed_cy >= td->ed_nlines) td->ed_cy = td->ed_nlines - 1;
+    if (td->ed_cy < 0) td->ed_cy = 0;
+    int off = ed_line_start(td->ed_buf, td->ed_len, td->ed_cy);
+    int ll = ed_line_len(td->ed_buf, td->ed_len, off);
+    if (td->ed_cx > ll) td->ed_cx = ll;
+    if (td->ed_cx < 0) td->ed_cx = 0;
+    /* Scroll to keep cursor visible */
+    if (td->ed_cy < td->ed_scroll)
+        td->ed_scroll = td->ed_cy;
+    if (td->ed_cy >= td->ed_scroll + ED_ROWS)
+        td->ed_scroll = td->ed_cy - ED_ROWS + 1;
+}
+
+static void ed_render(TermData *td, Rect cr)
+{
+    const ThemeColors *tc = theme_colors();
+    /* Dark background */
+    draw_filled_rect(cr, COLOR(10, 10, 20, 255));
+
+    /* Row 0: title bar */
+    Rect title_r = RECT(cr.x, cr.y + 4, cr.w, CHAR_H);
+    draw_filled_rect(title_r, COLOR(40, 40, 80, 255));
+    char title[80];
+    strcpy(title, " nano: ");
+    /* Show just filename, not full path */
+    const char *fname = td->ed_file;
+    const char *sl = strrchr(td->ed_file, '/');
+    if (sl && sl[1]) fname = sl + 1;
+    strcat(title, fname);
+    if (td->ed_dirty) strcat(title, " [Modified]");
+    draw_text(cr.x + 4, cr.y + 4, title, COLOR(255, 255, 255, 255), FONT_SIZE_SMALL);
+
+    /* Rows 1-22: file content */
+    for (int r = 0; r < ED_ROWS; r++) {
+        int line = td->ed_scroll + r;
+        int y = cr.y + 4 + (r + 1) * CHAR_H;
+        if (y + CHAR_H > cr.y + cr.h) break;
+
+        if (line < td->ed_nlines) {
+            int off = ed_line_start(td->ed_buf, td->ed_len, line);
+            int ll = ed_line_len(td->ed_buf, td->ed_len, off);
+            int max_c = TERM_COLS;
+            if (ll < max_c) max_c = ll;
+            for (int c = 0; c < max_c; c++) {
+                char ch = td->ed_buf[off + c];
+                if (ch >= 32 && ch <= 126) {
+                    char cc[2] = {ch, '\0'};
+                    int x = cr.x + 4 + c * CHAR_W;
+                    draw_text(x, y, cc, tc->text_primary, FONT_SIZE_SMALL);
+                }
+            }
+        } else {
+            /* Draw ~ for lines past end of file */
+            draw_text(cr.x + 4, y, "~", COLOR(100, 100, 140, 255), FONT_SIZE_SMALL);
+        }
+    }
+
+    /* Cursor */
+    int cur_screen_row = td->ed_cy - td->ed_scroll;
+    if (cur_screen_row >= 0 && cur_screen_row < ED_ROWS) {
+        if ((hal_get_ticks() / 500) % 2 == 0) {
+            int cx_px = cr.x + 4 + td->ed_cx * CHAR_W;
+            int cy_px = cr.y + 4 + (cur_screen_row + 1) * CHAR_H;
+            draw_filled_rect(RECT(cx_px, cy_px, 2, CHAR_H), tc->accent);
+        }
+    }
+
+    /* Row 23: status line */
+    int status_y = cr.y + 4 + 23 * CHAR_H;
+    Rect status_r = RECT(cr.x, status_y, cr.w, CHAR_H);
+    draw_filled_rect(status_r, COLOR(40, 40, 80, 255));
+
+    /* Show transient status message or position info */
+    char sline[80];
+    if (td->ed_status[0] && (hal_get_ticks() - td->ed_status_time < 3000)) {
+        strncpy(sline, td->ed_status, 79);
+    } else {
+        td->ed_status[0] = '\0';
+        strcpy(sline, " Line ");
+        char num[16];
+        itoa(td->ed_cy + 1, num, 10);
+        strcat(sline, num);
+        strcat(sline, ", Col ");
+        itoa(td->ed_cx + 1, num, 10);
+        strcat(sline, num);
+        strcat(sline, " | ");
+        itoa(td->ed_len, num, 10);
+        strcat(sline, num);
+        strcat(sline, " bytes");
+    }
+    sline[79] = '\0';
+    draw_text(cr.x + 4, status_y, sline, COLOR(200, 200, 255, 255), FONT_SIZE_SMALL);
+
+    /* Row 24: help bar */
+    int help_y = cr.y + 4 + 24 * CHAR_H;
+    Rect help_r = RECT(cr.x, help_y, cr.w, CHAR_H);
+    draw_filled_rect(help_r, COLOR(30, 30, 60, 255));
+    draw_text(cr.x + 4, help_y,
+              "^S Save  ^X Exit  ^K Cut Line  ^G Goto  Enter New Line",
+              COLOR(180, 180, 220, 255), FONT_SIZE_SMALL);
+}
+
+static void ed_on_key(TermData *td, uint16_t key, uint16_t mod)
+{
+    int ctrl = (mod & HAL_MOD_CTRL) != 0;
+
+    if (ctrl) {
+        switch (key) {
+        case HAL_KEY_S:
+            ed_save(td);
+            return;
+        case HAL_KEY_X:
+            ed_close(td);
+            term_puts(td, "\n");
+            term_prompt(td);
+            return;
+        case HAL_KEY_K:
+            ed_cut_line(td);
+            ed_clamp_cursor(td);
+            return;
+        case HAL_KEY_G: {
+            /* Goto — jump to top for now (simple impl) */
+            td->ed_cy = 0;
+            td->ed_cx = 0;
+            td->ed_scroll = 0;
+            ed_set_status(td, "Jumped to top");
+            return;
+        }
+        default:
+            break;
+        }
+    }
+
+    switch (key) {
+    case HAL_KEY_UP:
+        td->ed_cy--;
+        ed_clamp_cursor(td);
+        break;
+    case HAL_KEY_DOWN:
+        td->ed_cy++;
+        ed_clamp_cursor(td);
+        break;
+    case HAL_KEY_LEFT:
+        if (td->ed_cx > 0) {
+            td->ed_cx--;
+        } else if (td->ed_cy > 0) {
+            td->ed_cy--;
+            int off = ed_line_start(td->ed_buf, td->ed_len, td->ed_cy);
+            td->ed_cx = ed_line_len(td->ed_buf, td->ed_len, off);
+        }
+        ed_clamp_cursor(td);
+        break;
+    case HAL_KEY_RIGHT: {
+        int off = ed_line_start(td->ed_buf, td->ed_len, td->ed_cy);
+        int ll = ed_line_len(td->ed_buf, td->ed_len, off);
+        if (td->ed_cx < ll) {
+            td->ed_cx++;
+        } else if (td->ed_cy < td->ed_nlines - 1) {
+            td->ed_cy++;
+            td->ed_cx = 0;
+        }
+        ed_clamp_cursor(td);
+        break;
+    }
+    case HAL_KEY_HOME:
+        td->ed_cx = 0;
+        break;
+    case HAL_KEY_END: {
+        int off = ed_line_start(td->ed_buf, td->ed_len, td->ed_cy);
+        td->ed_cx = ed_line_len(td->ed_buf, td->ed_len, off);
+        break;
+    }
+    case HAL_KEY_PAGEUP:
+        td->ed_cy -= ED_ROWS;
+        ed_clamp_cursor(td);
+        break;
+    case HAL_KEY_PAGEDOWN:
+        td->ed_cy += ED_ROWS;
+        ed_clamp_cursor(td);
+        break;
+    case HAL_KEY_BACKSPACE:
+        ed_backspace(td);
+        ed_clamp_cursor(td);
+        break;
+    case HAL_KEY_DELETE:
+        ed_delete_char(td);
+        ed_clamp_cursor(td);
+        break;
+    case HAL_KEY_RETURN:
+        ed_insert_char(td, '\n');
+        ed_clamp_cursor(td);
+        break;
+    case HAL_KEY_TAB:
+        /* Insert 4 spaces */
+        for (int i = 0; i < 4; i++)
+            ed_insert_char(td, ' ');
+        ed_clamp_cursor(td);
+        break;
+    default:
+        break;
+    }
+}
+
+static void ed_on_text(TermData *td, char ch)
+{
+    if (ch >= 32 && ch < 127) {
+        ed_insert_char(td, ch);
+        ed_clamp_cursor(td);
+    }
+}
+
+static void cmd_nano(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        term_puts(td, "nano: missing filename\n");
+        term_puts(td, "Usage: nano <file>\n");
+        return;
+    }
+
+    /* Resolve path */
+    resolve_arg(td, args, td->ed_file, 256);
+
+    /* Allocate buffer */
+    td->ed_buf = (char *)kmalloc(ED_BUF_INIT);
+    if (!td->ed_buf) {
+        term_puts(td, "nano: out of memory\n");
+        return;
+    }
+    td->ed_cap = ED_BUF_INIT;
+    td->ed_len = 0;
+
+    /* Try to load existing file */
+    int fd = hal_fs_open(td->ed_file, FS_O_READ);
+    if (fd >= 0) {
+        char rbuf[512];
+        int n;
+        while ((n = hal_fs_read(fd, rbuf, sizeof(rbuf))) > 0) {
+            ed_grow(td, n);
+            memcpy(td->ed_buf + td->ed_len, rbuf, n);
+            td->ed_len += n;
+        }
+        hal_fs_close(fd);
+    }
+    /* else: new file, empty buffer */
+
+    td->ed_cx = 0;
+    td->ed_cy = 0;
+    td->ed_scroll = 0;
+    td->ed_dirty = 0;
+    td->ed_nlines = ed_count_lines(td->ed_buf, td->ed_len);
+    td->ed_status[0] = '\0';
+    td->ed_status_time = 0;
+    td->ed_active = 1;
+
+    if (fd < 0)
+        ed_set_status(td, "New file");
+    else {
+        char msg[80];
+        strcpy(msg, "Loaded ");
+        char num[16];
+        itoa(td->ed_len, num, 10);
+        strcat(msg, num);
+        strcat(msg, " bytes");
+        ed_set_status(td, msg);
+    }
+}
+
 static void execute_command(TermData *td, const char *cmd)
 {
     /* Save to history */
@@ -817,6 +1261,8 @@ static void execute_command(TermData *td, const char *cmd)
         cmd_theme(td, args);
     else if (strncmp(cmd, "apps", cmd_len) == 0 && cmd_len == 4)
         cmd_apps(td);
+    else if (strncmp(cmd, "nano", cmd_len) == 0 && cmd_len == 4)
+        cmd_nano(td, args);
     else {
         term_puts(td, "Unknown command: ");
         for (int i = 0; i < cmd_len; i++)
@@ -830,6 +1276,7 @@ static void execute_command(TermData *td, const char *cmd)
 static void term_render(AppContent *self, Rect cr)
 {
     TermData *td = (TermData *)self->data;
+    if (td->ed_active) { ed_render(td, cr); return; }
     const ThemeColors *tc = theme_colors();
 
     /* Terminal background */
@@ -878,6 +1325,7 @@ static void term_render(AppContent *self, Rect cr)
 static void term_on_text_input(AppContent *self, char ch)
 {
     TermData *td = (TermData *)self->data;
+    if (td->ed_active) { ed_on_text(td, ch); return; }
     if (ch >= 32 && ch < 127 && td->input_len < MAX_INPUT - 1) {
         /* Insert at cursor */
         for (int i = td->input_len; i > td->input_cursor; i--)
@@ -892,6 +1340,7 @@ static void term_on_text_input(AppContent *self, char ch)
 static void term_on_key_down(AppContent *self, uint16_t key, uint16_t mod)
 {
     TermData *td = (TermData *)self->data;
+    if (td->ed_active) { ed_on_key(td, key, mod); return; }
     (void)mod;
 
     switch (key) {
@@ -976,7 +1425,11 @@ static void term_on_key_down(AppContent *self, uint16_t key, uint16_t mod)
 
 static void term_destroy(AppContent *self)
 {
-    if (self->data) kfree(self->data);
+    TermData *td = (TermData *)self->data;
+    if (td) {
+        if (td->ed_buf) kfree(td->ed_buf);
+        kfree(td);
+    }
     kfree(self);
 }
 
