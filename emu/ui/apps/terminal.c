@@ -88,23 +88,39 @@ static void term_prompt(TermData *td)
     term_puts(td, " $ ");
 }
 
+/* Forward declarations */
+static void resolve_arg(TermData *td, const char *arg, char *out, int out_size);
+
 /* ── Built-in commands ───────────────────────────────────────── */
 
 static void cmd_help(TermData *td)
 {
     term_puts(td, "Available commands:\n");
-    term_puts(td, "  help        Show this help\n");
-    term_puts(td, "  clear       Clear screen\n");
-    term_puts(td, "  echo <msg>  Print message\n");
-    term_puts(td, "  ls          List files\n");
-    term_puts(td, "  cat <file>  Show file contents\n");
-    term_puts(td, "  pwd         Print working directory\n");
-    term_puts(td, "  uname       System info\n");
-    term_puts(td, "  uptime      System uptime\n");
-    term_puts(td, "  free        Memory info\n");
-    term_puts(td, "  ps          Process list\n");
-    term_puts(td, "  theme       List/set themes\n");
-    term_puts(td, "  apps        List applications\n");
+    term_puts(td, " File system:\n");
+    term_puts(td, "  ls             List files\n");
+    term_puts(td, "  cd <dir>       Change directory\n");
+    term_puts(td, "  pwd            Print working directory\n");
+    term_puts(td, "  cat <file>     Show file contents\n");
+    term_puts(td, "  head <file>    Show first 10 lines\n");
+    term_puts(td, "  wc <file>      Word/line/byte count\n");
+    term_puts(td, "  stat <path>    File info\n");
+    term_puts(td, "  touch <file>   Create empty file\n");
+    term_puts(td, "  write <f> <t>  Write text to file\n");
+    term_puts(td, "  mkdir <dir>    Create directory\n");
+    term_puts(td, "  rm <file>      Delete file\n");
+    term_puts(td, "  rmdir <dir>    Remove directory\n");
+    term_puts(td, "  mv <src> <dst> Move/rename\n");
+    term_puts(td, "  cp <src> <dst> Copy file\n");
+    term_puts(td, " System:\n");
+    term_puts(td, "  echo <msg>     Print message\n");
+    term_puts(td, "  clear          Clear screen\n");
+    term_puts(td, "  uname          System info\n");
+    term_puts(td, "  uptime         System uptime\n");
+    term_puts(td, "  free           Memory info\n");
+    term_puts(td, "  ps             Process list\n");
+    term_puts(td, "  theme [id]     List/set themes\n");
+    term_puts(td, "  apps           List applications\n");
+    term_puts(td, "  help           Show this help\n");
 }
 
 static void cmd_echo(TermData *td, const char *args)
@@ -114,11 +130,20 @@ static void cmd_echo(TermData *td, const char *args)
     term_putchar(td, '\n');
 }
 
-static void cmd_ls(TermData *td)
+static void cmd_ls(TermData *td, const char *args)
 {
-    int fd = hal_fs_open(td->cwd, FS_O_READ);
+    char path[256];
+    if (args && *args)
+        resolve_arg(td, args, path, 256);
+    else
+        strncpy(path, td->cwd, 255);
+    path[255] = '\0';
+
+    int fd = hal_fs_open(path, FS_O_READ);
     if (fd < 0) {
-        term_puts(td, "ls: cannot open directory\n");
+        term_puts(td, "ls: cannot open '");
+        term_puts(td, path);
+        term_puts(td, "'\n");
         return;
     }
 
@@ -127,16 +152,15 @@ static void cmd_ls(TermData *td)
         if (entry.type == FS_TYPE_DIR) {
             term_puts(td, "  [DIR]  ");
         } else {
-            term_puts(td, "         ");
-        }
-        term_puts(td, entry.name);
-        if (entry.type == FS_TYPE_FILE && entry.size > 0) {
-            term_puts(td, "  (");
+            /* Right-align size in 7 chars */
             char sz[16];
             utoa(entry.size, sz, 10);
+            int pad = 7 - (int)strlen(sz);
+            for (int i = 0; i < pad; i++) term_putchar(td, ' ');
             term_puts(td, sz);
-            term_puts(td, " bytes)");
+            term_puts(td, "  ");
         }
+        term_puts(td, entry.name);
         term_putchar(td, '\n');
     }
     hal_fs_close(fd);
@@ -278,11 +302,452 @@ static void cmd_theme(TermData *td, const char *args)
 static void cmd_apps(TermData *td)
 {
     term_puts(td, "Installed apps:\n");
-    /* Will be populated from app_registry */
     term_puts(td, "  Terminal\n");
     term_puts(td, "  File Manager\n");
     term_puts(td, "  Settings\n");
     term_puts(td, "  Task Manager\n");
+}
+
+/* Build full path from cwd + relative/absolute arg */
+static void resolve_arg(TermData *td, const char *arg, char *out, int out_size)
+{
+    if (!arg || !*arg) {
+        strncpy(out, td->cwd, out_size - 1);
+        out[out_size - 1] = '\0';
+        return;
+    }
+    if (arg[0] == '/') {
+        strncpy(out, arg, out_size - 1);
+        out[out_size - 1] = '\0';
+    } else {
+        strncpy(out, td->cwd, out_size - 1);
+        out[out_size - 1] = '\0';
+        if (out[strlen(out) - 1] != '/')
+            strcat(out, "/");
+        strcat(out, arg);
+    }
+}
+
+static void cmd_cd(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        strcpy(td->cwd, "/");
+        return;
+    }
+
+    char path[256];
+    if (strcmp(args, "..") == 0) {
+        strncpy(path, td->cwd, 255);
+        char *sl = strrchr(path, '/');
+        if (sl && sl != path) *sl = '\0';
+        else strcpy(path, "/");
+    } else if (strcmp(args, "/") == 0) {
+        strcpy(path, "/");
+    } else {
+        resolve_arg(td, args, path, 256);
+    }
+
+    /* Verify directory exists */
+    fs_stat_t st;
+    if (hal_fs_stat(path, &st) == 0 && st.type == FS_TYPE_DIR) {
+        strncpy(td->cwd, path, 255);
+        td->cwd[255] = '\0';
+    } else {
+        /* Try as simple name in cwd */
+        if (args[0] != '/' && args[0] != '.') {
+            char try[256];
+            resolve_arg(td, args, try, 256);
+            int fd = hal_fs_open(try, FS_O_READ);
+            if (fd >= 0) {
+                hal_fs_close(fd);
+                /* Check if it's a directory by trying readdir */
+                fd = hal_fs_open(try, FS_O_READ);
+                if (fd >= 0) {
+                    fs_dirent_t e;
+                    int is_dir = (hal_fs_readdir(fd, &e) >= 0);
+                    hal_fs_close(fd);
+                    if (is_dir) {
+                        strncpy(td->cwd, try, 255);
+                        td->cwd[255] = '\0';
+                        return;
+                    }
+                }
+            }
+        }
+        term_puts(td, "cd: no such directory: ");
+        term_puts(td, args);
+        term_putchar(td, '\n');
+    }
+}
+
+static void cmd_mkdir(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        term_puts(td, "mkdir: missing operand\n");
+        return;
+    }
+    char path[256];
+    resolve_arg(td, args, path, 256);
+    if (hal_fs_mkdir(path) == 0) {
+        term_puts(td, "Created: ");
+        term_puts(td, args);
+        term_putchar(td, '\n');
+    } else {
+        term_puts(td, "mkdir: cannot create '");
+        term_puts(td, args);
+        term_puts(td, "'\n");
+    }
+}
+
+static void cmd_rm(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        term_puts(td, "rm: missing operand\n");
+        return;
+    }
+    char path[256];
+    resolve_arg(td, args, path, 256);
+    if (hal_fs_unlink(path) == 0) {
+        term_puts(td, "Removed: ");
+        term_puts(td, args);
+        term_putchar(td, '\n');
+    } else {
+        term_puts(td, "rm: cannot remove '");
+        term_puts(td, args);
+        term_puts(td, "'\n");
+    }
+}
+
+static void cmd_rmdir(TermData *td, const char *args)
+{
+    /* rmdir is same as rm for our FAT16 (unlink handles dirs) */
+    if (!args || !*args) {
+        term_puts(td, "rmdir: missing operand\n");
+        return;
+    }
+    char path[256];
+    resolve_arg(td, args, path, 256);
+    if (hal_fs_unlink(path) == 0) {
+        term_puts(td, "Removed directory: ");
+        term_puts(td, args);
+        term_putchar(td, '\n');
+    } else {
+        term_puts(td, "rmdir: cannot remove '");
+        term_puts(td, args);
+        term_puts(td, "'\n");
+    }
+}
+
+static void cmd_touch(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        term_puts(td, "touch: missing operand\n");
+        return;
+    }
+    char path[256];
+    resolve_arg(td, args, path, 256);
+    int fd = hal_fs_open(path, FS_O_CREATE | FS_O_WRITE);
+    if (fd >= 0) {
+        hal_fs_close(fd);
+    } else {
+        term_puts(td, "touch: cannot create '");
+        term_puts(td, args);
+        term_puts(td, "'\n");
+    }
+}
+
+static void cmd_mv(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        term_puts(td, "mv: missing operand\n");
+        term_puts(td, "Usage: mv <source> <dest>\n");
+        return;
+    }
+
+    /* Parse two arguments */
+    const char *src_arg = args;
+    const char *dst_arg = args;
+    while (*dst_arg && *dst_arg != ' ') dst_arg++;
+    if (!*dst_arg) {
+        term_puts(td, "mv: missing destination\n");
+        return;
+    }
+
+    /* Null-terminate src in a temp buffer */
+    char src_name[64];
+    int slen = (int)(dst_arg - src_arg);
+    if (slen > 63) slen = 63;
+    memcpy(src_name, src_arg, slen);
+    src_name[slen] = '\0';
+
+    while (*dst_arg == ' ') dst_arg++;
+    if (!*dst_arg) {
+        term_puts(td, "mv: missing destination\n");
+        return;
+    }
+
+    char src_path[256], dst_path[256];
+    resolve_arg(td, src_name, src_path, 256);
+    resolve_arg(td, dst_arg, dst_path, 256);
+
+    if (hal_fs_rename(src_path, dst_path) == 0) {
+        term_puts(td, "Moved: ");
+        term_puts(td, src_name);
+        term_puts(td, " -> ");
+        term_puts(td, dst_arg);
+        term_putchar(td, '\n');
+    } else {
+        term_puts(td, "mv: cannot move '");
+        term_puts(td, src_name);
+        term_puts(td, "'\n");
+    }
+}
+
+static void cmd_cp(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        term_puts(td, "cp: missing operand\n");
+        term_puts(td, "Usage: cp <source> <dest>\n");
+        return;
+    }
+
+    /* Parse two arguments */
+    const char *src_arg = args;
+    const char *dst_arg = args;
+    while (*dst_arg && *dst_arg != ' ') dst_arg++;
+    if (!*dst_arg) {
+        term_puts(td, "cp: missing destination\n");
+        return;
+    }
+
+    char src_name[64];
+    int slen = (int)(dst_arg - src_arg);
+    if (slen > 63) slen = 63;
+    memcpy(src_name, src_arg, slen);
+    src_name[slen] = '\0';
+
+    while (*dst_arg == ' ') dst_arg++;
+    if (!*dst_arg) {
+        term_puts(td, "cp: missing destination\n");
+        return;
+    }
+
+    char src_path[256], dst_path[256];
+    resolve_arg(td, src_name, src_path, 256);
+    resolve_arg(td, dst_arg, dst_path, 256);
+
+    /* Open source for reading */
+    int src_fd = hal_fs_open(src_path, FS_O_READ);
+    if (src_fd < 0) {
+        term_puts(td, "cp: cannot open '");
+        term_puts(td, src_name);
+        term_puts(td, "'\n");
+        return;
+    }
+
+    /* Create destination */
+    int dst_fd = hal_fs_open(dst_path, FS_O_CREATE | FS_O_WRITE);
+    if (dst_fd < 0) {
+        hal_fs_close(src_fd);
+        term_puts(td, "cp: cannot create '");
+        term_puts(td, dst_arg);
+        term_puts(td, "'\n");
+        return;
+    }
+
+    /* Copy data */
+    char buf[512];
+    int n;
+    int total = 0;
+    while ((n = hal_fs_read(src_fd, buf, sizeof(buf))) > 0) {
+        int w = hal_fs_write(dst_fd, buf, n);
+        if (w < 0) break;
+        total += w;
+    }
+
+    hal_fs_close(src_fd);
+    hal_fs_close(dst_fd);
+
+    term_puts(td, "Copied ");
+    char sz[16];
+    utoa((unsigned)total, sz, 10);
+    term_puts(td, sz);
+    term_puts(td, " bytes: ");
+    term_puts(td, src_name);
+    term_puts(td, " -> ");
+    term_puts(td, dst_arg);
+    term_putchar(td, '\n');
+}
+
+static void cmd_stat(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        term_puts(td, "stat: missing operand\n");
+        return;
+    }
+    char path[256];
+    resolve_arg(td, args, path, 256);
+
+    fs_stat_t st;
+    if (hal_fs_stat(path, &st) != 0) {
+        term_puts(td, "stat: cannot stat '");
+        term_puts(td, args);
+        term_puts(td, "'\n");
+        return;
+    }
+
+    term_puts(td, "  File: ");
+    term_puts(td, st.name);
+    term_putchar(td, '\n');
+    term_puts(td, "  Type: ");
+    term_puts(td, st.type == FS_TYPE_DIR ? "directory" : "regular file");
+    term_putchar(td, '\n');
+    term_puts(td, "  Size: ");
+    char buf[16];
+    utoa(st.size, buf, 10);
+    term_puts(td, buf);
+    term_puts(td, " bytes\n");
+    term_puts(td, "  Path: ");
+    term_puts(td, path);
+    term_putchar(td, '\n');
+    term_puts(td, "    FS: FAT16\n");
+}
+
+static void cmd_write(TermData *td, const char *args)
+{
+    /* write <filename> <content> — write text to a file */
+    if (!args || !*args) {
+        term_puts(td, "write: missing operand\n");
+        term_puts(td, "Usage: write <file> <text>\n");
+        return;
+    }
+
+    const char *fname = args;
+    const char *content = args;
+    while (*content && *content != ' ') content++;
+    if (!*content) {
+        term_puts(td, "write: missing content\n");
+        return;
+    }
+
+    char filename[64];
+    int flen = (int)(content - fname);
+    if (flen > 63) flen = 63;
+    memcpy(filename, fname, flen);
+    filename[flen] = '\0';
+
+    while (*content == ' ') content++;
+
+    char path[256];
+    resolve_arg(td, filename, path, 256);
+
+    int fd = hal_fs_open(path, FS_O_CREATE | FS_O_WRITE);
+    if (fd < 0) {
+        term_puts(td, "write: cannot open '");
+        term_puts(td, filename);
+        term_puts(td, "'\n");
+        return;
+    }
+
+    int len = (int)strlen(content);
+    int w = hal_fs_write(fd, content, len);
+    /* Write a newline too */
+    hal_fs_write(fd, "\n", 1);
+    hal_fs_close(fd);
+
+    if (w >= 0) {
+        char buf[16];
+        itoa(w + 1, buf, 10);
+        term_puts(td, "Wrote ");
+        term_puts(td, buf);
+        term_puts(td, " bytes to ");
+        term_puts(td, filename);
+        term_putchar(td, '\n');
+    } else {
+        term_puts(td, "write: error writing\n");
+    }
+}
+
+static void cmd_wc(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        term_puts(td, "wc: missing operand\n");
+        return;
+    }
+    char path[256];
+    resolve_arg(td, args, path, 256);
+
+    int fd = hal_fs_open(path, FS_O_READ);
+    if (fd < 0) {
+        term_puts(td, "wc: cannot open '");
+        term_puts(td, args);
+        term_puts(td, "'\n");
+        return;
+    }
+
+    int bytes = 0, lines = 0, words = 0;
+    int in_word = 0;
+    char buf[256];
+    int n;
+    while ((n = hal_fs_read(fd, buf, sizeof(buf))) > 0) {
+        for (int i = 0; i < n; i++) {
+            bytes++;
+            if (buf[i] == '\n') lines++;
+            if (buf[i] == ' ' || buf[i] == '\n' || buf[i] == '\t') {
+                in_word = 0;
+            } else if (!in_word) {
+                in_word = 1;
+                words++;
+            }
+        }
+    }
+    hal_fs_close(fd);
+
+    char num[16];
+    term_puts(td, "  ");
+    itoa(lines, num, 10);
+    term_puts(td, num);
+    term_puts(td, " lines, ");
+    itoa(words, num, 10);
+    term_puts(td, num);
+    term_puts(td, " words, ");
+    itoa(bytes, num, 10);
+    term_puts(td, num);
+    term_puts(td, " bytes  ");
+    term_puts(td, args);
+    term_putchar(td, '\n');
+}
+
+static void cmd_head(TermData *td, const char *args)
+{
+    if (!args || !*args) {
+        term_puts(td, "head: missing operand\n");
+        return;
+    }
+    char path[256];
+    resolve_arg(td, args, path, 256);
+
+    int fd = hal_fs_open(path, FS_O_READ);
+    if (fd < 0) {
+        term_puts(td, "head: cannot open '");
+        term_puts(td, args);
+        term_puts(td, "'\n");
+        return;
+    }
+
+    /* Show first 10 lines */
+    char buf[128];
+    int n;
+    int lines = 0;
+    while (lines < 10 && (n = hal_fs_read(fd, buf, sizeof(buf) - 1)) > 0) {
+        buf[n] = '\0';
+        for (int i = 0; i < n && lines < 10; i++) {
+            term_putchar(td, buf[i]);
+            if (buf[i] == '\n') lines++;
+        }
+    }
+    if (lines == 0) term_putchar(td, '\n');
+    hal_fs_close(fd);
 }
 
 static void execute_command(TermData *td, const char *cmd)
@@ -311,13 +776,35 @@ static void execute_command(TermData *td, const char *cmd)
     else if (strncmp(cmd, "echo", cmd_len) == 0 && cmd_len == 4)
         cmd_echo(td, args);
     else if (strncmp(cmd, "ls", cmd_len) == 0 && cmd_len == 2)
-        cmd_ls(td);
+        cmd_ls(td, args);
     else if (strncmp(cmd, "cat", cmd_len) == 0 && cmd_len == 3)
         cmd_cat(td, args);
+    else if (strncmp(cmd, "cd", cmd_len) == 0 && cmd_len == 2)
+        cmd_cd(td, args);
     else if (strncmp(cmd, "pwd", cmd_len) == 0 && cmd_len == 3) {
         term_puts(td, td->cwd);
         term_putchar(td, '\n');
     }
+    else if (strncmp(cmd, "mkdir", cmd_len) == 0 && cmd_len == 5)
+        cmd_mkdir(td, args);
+    else if (strncmp(cmd, "rmdir", cmd_len) == 0 && cmd_len == 5)
+        cmd_rmdir(td, args);
+    else if (strncmp(cmd, "rm", cmd_len) == 0 && cmd_len == 2)
+        cmd_rm(td, args);
+    else if (strncmp(cmd, "touch", cmd_len) == 0 && cmd_len == 5)
+        cmd_touch(td, args);
+    else if (strncmp(cmd, "mv", cmd_len) == 0 && cmd_len == 2)
+        cmd_mv(td, args);
+    else if (strncmp(cmd, "cp", cmd_len) == 0 && cmd_len == 2)
+        cmd_cp(td, args);
+    else if (strncmp(cmd, "stat", cmd_len) == 0 && cmd_len == 4)
+        cmd_stat(td, args);
+    else if (strncmp(cmd, "write", cmd_len) == 0 && cmd_len == 5)
+        cmd_write(td, args);
+    else if (strncmp(cmd, "wc", cmd_len) == 0 && cmd_len == 2)
+        cmd_wc(td, args);
+    else if (strncmp(cmd, "head", cmd_len) == 0 && cmd_len == 4)
+        cmd_head(td, args);
     else if (strncmp(cmd, "uname", cmd_len) == 0 && cmd_len == 5)
         cmd_uname(td);
     else if (strncmp(cmd, "uptime", cmd_len) == 0 && cmd_len == 6)
@@ -332,10 +819,9 @@ static void execute_command(TermData *td, const char *cmd)
         cmd_apps(td);
     else {
         term_puts(td, "Unknown command: ");
-        /* Print just the command name */
         for (int i = 0; i < cmd_len; i++)
             term_putchar(td, cmd[i]);
-        term_puts(td, "\nType 'help' for available commands.\n");
+        term_puts(td, "\nType 'help' for commands.\n");
     }
 }
 

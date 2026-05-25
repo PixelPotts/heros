@@ -446,9 +446,107 @@ int fs_read(int fd, void *buf, int size)
 
 int fs_write(int fd, const void *buf, int size)
 {
-    /* Simplified: writes not fully implemented yet */
-    (void)fd; (void)buf; (void)size;
-    return -1;
+    if (fd < 0 || fd >= FS_MAX_OPEN || !fd_table[fd].used)
+        return -1;
+    if (fd_table[fd].is_dir) return -1;
+    if (size <= 0) return 0;
+
+    fd_entry_t *f = &fd_table[fd];
+    const uint8_t *src = (const uint8_t *)buf;
+    int total_written = 0;
+
+    /* If file has no cluster yet, allocate one */
+    if (f->start_cluster == 0) {
+        uint16_t c = fat_alloc();
+        if (c == 0) return -1;
+        f->start_cluster = c;
+        f->cur_cluster = c;
+
+        /* Update directory entry with new cluster */
+        uint16_t parent;
+        char name[FS_MAX_NAME];
+        resolve_path(f->path, &parent, name);
+        if (name[0] != '\0') {
+            uint32_t sec;
+            int idx;
+            if (find_root_entry_loc(name, &sec, &idx) == 0) {
+                if (disk_read_sector(sec, sector_buf) == 0) {
+                    fat16_dirent_t *entries = (fat16_dirent_t *)sector_buf;
+                    entries[idx].first_cluster = c;
+                    disk_write_sector(sec, sector_buf);
+                }
+            }
+        }
+    }
+
+    while (size > 0) {
+        uint32_t cluster_size = (uint32_t)fs.sectors_per_cluster * 512;
+        uint32_t pos_in_cluster = f->position % cluster_size;
+        uint32_t sector_in_cluster = pos_in_cluster / 512;
+        uint32_t pos_in_sector = pos_in_cluster % 512;
+
+        uint32_t sector = cluster_to_sector(f->cur_cluster) + sector_in_cluster;
+
+        /* Read existing sector data (for partial writes) */
+        if (pos_in_sector != 0 || size < 512) {
+            if (disk_read_sector(sector, sector_buf) != 0)
+                break;
+        } else {
+            memset(sector_buf, 0, 512);
+        }
+
+        /* Write into sector buffer */
+        int avail = 512 - (int)pos_in_sector;
+        int to_write = size < avail ? size : avail;
+        memcpy(sector_buf + pos_in_sector, src, to_write);
+
+        if (disk_write_sector(sector, sector_buf) != 0)
+            break;
+
+        src += to_write;
+        f->position += to_write;
+        size -= to_write;
+        total_written += to_write;
+
+        /* Update file size if we wrote past the end */
+        if (f->position > f->file_size)
+            f->file_size = f->position;
+
+        /* Need next cluster? */
+        if (f->position % cluster_size == 0 && size > 0) {
+            uint16_t next = fat_read(f->cur_cluster);
+            if (next >= 0xFFF8 || next < 2) {
+                /* Allocate new cluster */
+                uint16_t nc = fat_alloc();
+                if (nc == 0) break;
+                /* Chain current → new */
+                fat_write(f->cur_cluster, nc);
+                f->cur_cluster = nc;
+            } else {
+                f->cur_cluster = next;
+            }
+        }
+    }
+
+    /* Update directory entry size */
+    if (total_written > 0) {
+        uint16_t parent;
+        char name[FS_MAX_NAME];
+        resolve_path(f->path, &parent, name);
+        if (name[0] != '\0') {
+            uint32_t sec;
+            int idx;
+            if (find_root_entry_loc(name, &sec, &idx) == 0) {
+                if (disk_read_sector(sec, sector_buf) == 0) {
+                    fat16_dirent_t *entries = (fat16_dirent_t *)sector_buf;
+                    entries[idx].file_size = f->file_size;
+                    disk_write_sector(sec, sector_buf);
+                }
+            }
+        }
+    }
+
+    return total_written;
 }
 
 int fs_stat(const char *path, void *stat_out)
