@@ -23,6 +23,7 @@ extern AppContent *terminal_create(void);
 extern AppContent *filemanager_create(void);
 extern AppContent *settings_create(void);
 extern AppContent *taskmanager_create(void);
+extern AppContent *doom3d_create(void);
 
 /* ── Background ─────────────────────────────────────────────── */
 static void render_background(void)
@@ -50,6 +51,7 @@ void desktop_main(void)
     app_registry_register("Files", ICON_FILES, filemanager_create);
     app_registry_register("Settings", ICON_SETTINGS, settings_create);
     app_registry_register("Tasks", ICON_TASK_MGR, taskmanager_create);
+    app_registry_register("Doom3D", ICON_GAME, doom3d_create);
 
     kprintf("[desktop] Registered %d apps\n", app_registry_count());
     kprintf("[desktop] Lock screen active (password: heros)\n");

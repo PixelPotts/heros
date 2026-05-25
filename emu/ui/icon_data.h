@@ -460,8 +460,36 @@ static const uint8_t icon_bmp_image[72] = {
     0x00, 0x00, 0x00,  /* row 23 */
 };
 
+/* ICON_GAME — gamepad controller */
+static const uint8_t icon_bmp_game[72] = {
+    0x00, 0x00, 0x00,  /* row  0 */
+    0x00, 0x00, 0x00,  /* row  1 */
+    0x00, 0x00, 0x00,  /* row  2 */
+    0x00, 0x00, 0x00,  /* row  3 */
+    0x00, 0x00, 0x00,  /* row  4 */
+    0x03, 0xFF, 0xC0,  /* row  5 */
+    0x03, 0xFF, 0xC0,  /* row  6 */
+    0x0C, 0x00, 0x30,  /* row  7 */
+    0x0C, 0x00, 0x30,  /* row  8 */
+    0x30, 0x18, 0xCC,  /* row  9 */
+    0x30, 0x18, 0xCC,  /* row 10 */
+    0x30, 0x7E, 0xCC,  /* row 11 */
+    0x30, 0x7E, 0xCC,  /* row 12 */
+    0x30, 0x18, 0x0C,  /* row 13 */
+    0x30, 0x18, 0x0C,  /* row 14 */
+    0x0C, 0x00, 0x30,  /* row 15 */
+    0x0C, 0x00, 0x30,  /* row 16 */
+    0x03, 0xFF, 0xC0,  /* row 17 */
+    0x03, 0xFF, 0xC0,  /* row 18 */
+    0x00, 0x00, 0x00,  /* row 19 */
+    0x00, 0x00, 0x00,  /* row 20 */
+    0x00, 0x00, 0x00,  /* row 21 */
+    0x00, 0x00, 0x00,  /* row 22 */
+    0x00, 0x00, 0x00,  /* row 23 */
+};
+
 /* Lookup table indexed by IconId */
-static const uint8_t *icon_bitmaps[17] = {
+static const uint8_t *icon_bitmaps[18] = {
     [ICON_TERMINAL] = icon_bmp_terminal,
     [ICON_FILES] = icon_bmp_folder,
     [ICON_SETTINGS] = icon_bmp_settings_cog,
@@ -479,6 +507,7 @@ static const uint8_t *icon_bitmaps[17] = {
     [ICON_BATTERY] = icon_bmp_battery,
     [ICON_CLOCK] = icon_bmp_clock,
     [ICON_IMAGE] = icon_bmp_image,
+    [ICON_GAME] = icon_bmp_game,
 };
 
 #endif /* UI_ICON_DATA_H */

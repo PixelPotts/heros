@@ -71,7 +71,8 @@ UI_SRC  = ui/theme.c \
           ui/apps/filemanager.c \
           ui/apps/settings.c \
           ui/apps/taskmanager.c \
-          ui/apps/imageviewer.c
+          ui/apps/imageviewer.c \
+          ui/apps/doom3d.c
 
 ALL_RV_SRC = $(KERN_SRC) $(HAL_SRC) $(UI_SRC)
 

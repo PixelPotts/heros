@@ -22,6 +22,7 @@ typedef enum {
     ICON_BATTERY,
     ICON_CLOCK,
     ICON_IMAGE,
+    ICON_GAME,
     ICON_COUNT
 } IconId;
 
