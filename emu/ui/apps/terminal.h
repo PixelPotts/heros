@@ -4,5 +4,6 @@
 #include "../window.h"
 
 AppContent *terminal_create(void);
+AppContent *terminal_create_with_nano(const char *path);
 
 #endif

@@ -8,6 +8,7 @@
 #include "../../kernel/string.h"
 #include "../../kernel/mm.h"
 #include "../../hal/hal_fs.h"
+#include "terminal.h"
 
 /*──────────────────────────────────────────────────────────────────
  * Layout constants
@@ -350,23 +351,86 @@ static void fm_navigate(FMData *fm, const char *path)
     fm_load(fm);
 }
 
+static int is_text_file(const char *name)
+{
+    static const char *exts[] = {
+        /* Documents & markup */
+        ".txt", ".text", ".md", ".markdown", ".rst", ".adoc",
+        ".html", ".htm", ".xml", ".xhtml", ".svg",
+        ".css", ".scss", ".sass", ".less",
+        /* Data formats */
+        ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
+        ".config", ".env", ".properties", ".csv", ".tsv",
+        /* Programming — C family */
+        ".c", ".h", ".cpp", ".hpp", ".cc", ".cxx", ".hh",
+        /* Programming — scripting */
+        ".py", ".rb", ".pl", ".lua", ".sh", ".bash", ".zsh",
+        ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
+        ".php", ".r", ".swift", ".kt", ".kts",
+        /* Programming — systems */
+        ".rs", ".go", ".java", ".scala", ".zig", ".nim", ".d",
+        /* Assembly / low-level */
+        ".s", ".asm", ".ld",
+        /* Build / DevOps */
+        ".mk", ".cmake", ".gradle", ".sbt",
+        ".dockerfile", ".tf", ".hcl",
+        /* Database */
+        ".sql",
+        /* Misc */
+        ".log", ".diff", ".patch", ".bat", ".ps1", ".vim",
+        ".gitignore", ".editorconfig",
+        ".vue", ".svelte",
+        (void *)0
+    };
+    const char *dot = strrchr(name, '.');
+    if (!dot) {
+        /* No extension — check common extensionless text files */
+        if (strcmp(name, "Makefile") == 0) return 1;
+        if (strcmp(name, "README") == 0) return 1;
+        if (strcmp(name, "LICENSE") == 0) return 1;
+        if (strcmp(name, "CHANGELOG") == 0) return 1;
+        return 0;
+    }
+    for (int i = 0; exts[i]; i++) {
+        if (strcmp(dot, exts[i]) == 0) return 1;
+    }
+    return 0;
+}
+
 static void fm_open_selected(FMData *fm)
 {
     if (fm->selected < 0 || fm->selected >= fm->view_count) return;
     const fs_dirent_t *e = &fm->entries[fm->view[fm->selected]];
 
-    if (e->type != FS_TYPE_DIR) return;
-
-    char path[256];
-    if (strcmp(e->name, "..") == 0) {
-        strncpy(path, fm->cwd, 255);
-        char *sl = strrchr(path, '/');
-        if (sl && sl != path) *sl = '\0';
-        else strcpy(path, "/");
-    } else {
-        build_path(fm->cwd, e->name, path);
+    if (e->type == FS_TYPE_DIR) {
+        char path[256];
+        if (strcmp(e->name, "..") == 0) {
+            strncpy(path, fm->cwd, 255);
+            char *sl = strrchr(path, '/');
+            if (sl && sl != path) *sl = '\0';
+            else strcpy(path, "/");
+        } else {
+            build_path(fm->cwd, e->name, path);
+        }
+        fm_navigate(fm, path);
+        return;
     }
-    fm_navigate(fm, path);
+
+    /* Text file → open in terminal with nano */
+    if (is_text_file(e->name)) {
+        char full[256];
+        build_path(fm->cwd, e->name, full);
+        AppContent *content = terminal_create_with_nano(full);
+        if (content) {
+            char title[64];
+            strcpy(title, "nano: ");
+            strncpy(title + 6, e->name, 57);
+            title[63] = '\0';
+            wm_open(title, 120, 80, 500, 350,
+                    WIN_CLOSABLE | WIN_RESIZABLE, -1, content);
+        }
+        return;
+    }
 }
 
 static void fm_go_up(FMData *fm)

@@ -1459,3 +1459,37 @@ AppContent *terminal_create(void)
 
     return app;
 }
+
+AppContent *terminal_create_with_nano(const char *path)
+{
+    AppContent *app = (AppContent *)kmalloc(sizeof(AppContent));
+    if (!app) return (void *)0;
+    memset(app, 0, sizeof(AppContent));
+
+    TermData *td = (TermData *)kmalloc(sizeof(TermData));
+    if (!td) { kfree(app); return (void *)0; }
+    memset(td, 0, sizeof(TermData));
+
+    term_clear_screen(td);
+    strcpy(td->cwd, "/");
+
+    /* Set cwd to the file's directory */
+    if (path && path[0] == '/') {
+        strncpy(td->cwd, path, 255);
+        td->cwd[255] = '\0';
+        char *sl = strrchr(td->cwd, '/');
+        if (sl && sl != td->cwd) *sl = '\0';
+        else strcpy(td->cwd, "/");
+    }
+
+    /* Open nano directly on the file */
+    cmd_nano(td, path);
+
+    app->render = term_render;
+    app->on_text_input = term_on_text_input;
+    app->on_key_down = term_on_key_down;
+    app->destroy = term_destroy;
+    app->data = td;
+
+    return app;
+}
