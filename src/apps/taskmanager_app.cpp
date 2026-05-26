@@ -4,7 +4,10 @@
 #include "../process.h"
 #include <cstdio>
 #include <ctime>
+#include <cstring>
 #include <algorithm>
+#include <sched.h>
+#include <unistd.h>
 
 // ── Constants ───────────────────────────────────────────────────
 
@@ -153,6 +156,105 @@ void TaskManagerApp::render_process_list(SDL_Renderer* r, const Fonts* f,
     content_h_ = (int)procs.size() * ROW_H + 80;
 }
 
+// ── Resource isolation reading ──────────────────────────────────
+
+static std::string format_cpu_set(cpu_set_t* set, int max_cpus) {
+    std::string result;
+    int range_start = -1;
+    for (int i = 0; i <= max_cpus; i++) {
+        bool in_set = (i < max_cpus) && CPU_ISSET(i, set);
+        if (in_set && range_start < 0) {
+            range_start = i;
+        } else if (!in_set && range_start >= 0) {
+            if (!result.empty()) result += ",";
+            if (i - 1 == range_start)
+                result += std::to_string(range_start);
+            else
+                result += std::to_string(range_start) + "-" + std::to_string(i - 1);
+            range_start = -1;
+        }
+    }
+    return result;
+}
+
+static std::string read_file_line(const char* path) {
+    FILE* fp = fopen(path, "r");
+    if (!fp) return {};
+    char buf[256];
+    buf[0] = 0;
+    if (fgets(buf, sizeof(buf), fp)) {
+        // strip newline
+        size_t len = strlen(buf);
+        if (len > 0 && buf[len - 1] == '\n') buf[len - 1] = 0;
+    }
+    fclose(fp);
+    return buf;
+}
+
+void TaskManagerApp::read_resources() {
+    time_t now = time(nullptr);
+    if (now - res_last_update_ < 2) return;
+    res_last_update_ = now;
+
+    // CPU affinity
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    if (sched_getaffinity(0, sizeof(cpuset), &cpuset) == 0) {
+        res_.total_cpus = (int)sysconf(_SC_NPROCESSORS_ONLN);
+        res_.cpu_count = CPU_COUNT(&cpuset);
+        res_.allowed_cpus = format_cpu_set(&cpuset, res_.total_cpus);
+    }
+
+    // Find our cgroup path
+    std::string cgroup_path;
+    FILE* fp = fopen("/proc/self/cgroup", "r");
+    if (fp) {
+        char line[512];
+        while (fgets(line, sizeof(line), fp)) {
+            // Format: "0::/path"  (cgroup v2)
+            if (strncmp(line, "0::", 3) == 0) {
+                char* p = line + 3;
+                size_t len = strlen(p);
+                if (len > 0 && p[len - 1] == '\n') p[len - 1] = 0;
+                cgroup_path = std::string("/sys/fs/cgroup") + p;
+                break;
+            }
+        }
+        fclose(fp);
+    }
+
+    // Memory limit
+    res_.mem_limit_bytes = 0;
+    if (!cgroup_path.empty()) {
+        std::string val = read_file_line((cgroup_path + "/memory.max").c_str());
+        if (!val.empty() && val != "max") {
+            res_.mem_limit_bytes = strtoull(val.c_str(), nullptr, 10);
+        }
+    }
+
+    // Memory current usage
+    res_.mem_used_bytes = 0;
+    if (!cgroup_path.empty()) {
+        std::string val = read_file_line((cgroup_path + "/memory.current").c_str());
+        if (!val.empty()) {
+            res_.mem_used_bytes = strtoull(val.c_str(), nullptr, 10);
+        }
+    }
+
+    res_.isolated = (res_.cpu_count > 0 && res_.cpu_count < res_.total_cpus);
+}
+
+static std::string format_bytes(uint64_t bytes) {
+    char buf[32];
+    if (bytes >= (uint64_t)1073741824)
+        snprintf(buf, sizeof(buf), "%.1f GB", (double)bytes / 1073741824.0);
+    else if (bytes >= 1048576)
+        snprintf(buf, sizeof(buf), "%llu MB", (unsigned long long)(bytes / 1048576));
+    else
+        snprintf(buf, sizeof(buf), "%llu KB", (unsigned long long)(bytes / 1024));
+    return buf;
+}
+
 // ── System stats ────────────────────────────────────────────────
 
 void TaskManagerApp::render_system_stats(SDL_Renderer* r, const Fonts* f,
@@ -179,9 +281,66 @@ void TaskManagerApp::render_system_stats(SDL_Renderer* r, const Fonts* f,
     draw::text(r, f->body, "Renderer", x + PAD, sy, DIM);
     draw::text_right(r, f->body, "SDL2 Accelerated", x + w - PAD, sy, WHITE);
 
+    // Resource Isolation card
+    read_resources();
+    int ri_h = 140;
+    int ry = y + 100 + GAP;
+    card_bg(r, x, ry, w, ri_h);
+    draw::text(r, f->title, "Resource Isolation", x + PAD, ry + PAD, WHITE);
+
+    int iy_r = ry + 44;
+
+    // CPU cores
+    {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%s (%d cores)", res_.allowed_cpus.c_str(), res_.cpu_count);
+        draw::text(r, f->body, "CPU Cores", x + PAD, iy_r, DIM);
+        draw::text_right(r, f->body, buf, x + w - PAD, iy_r, WHITE);
+        iy_r += 24;
+    }
+
+    // Memory usage + progress bar
+    if (res_.mem_limit_bytes > 0) {
+        std::string used_str = format_bytes(res_.mem_used_bytes) + " / " + format_bytes(res_.mem_limit_bytes);
+        draw::text(r, f->body, "Memory", x + PAD, iy_r, DIM);
+        draw::text_right(r, f->body, used_str.c_str(), x + w - PAD, iy_r, WHITE);
+        iy_r += 22;
+
+        // Progress bar
+        int bar_x = x + PAD;
+        int bar_w = w - PAD * 2;
+        int bar_h = 8;
+        draw::filled_rounded_rect(r, {bar_x, iy_r, bar_w, bar_h}, 4, {255, 255, 255, 20});
+        double frac = (double)res_.mem_used_bytes / (double)res_.mem_limit_bytes;
+        if (frac > 1.0) frac = 1.0;
+        int fill_w = (int)(bar_w * frac);
+        if (fill_w > 0) {
+            SDL_Color bar_col = (frac < 0.75) ? GREEN : (frac < 0.9 ? YELLOW : RED);
+            draw::filled_rounded_rect(r, {bar_x, iy_r, fill_w, bar_h}, 4, bar_col);
+        }
+        iy_r += 16;
+    } else {
+        draw::text(r, f->body, "Memory Limit", x + PAD, iy_r, DIM);
+        draw::text_right(r, f->body, "None (unlimited)", x + w - PAD, iy_r, DIM);
+        iy_r += 24;
+    }
+
+    // Status dot + label
+    {
+        SDL_Color dot_col = res_.isolated ? GREEN : DIM;
+        const char* label = res_.isolated ? "Isolated" : "No isolation";
+        SDL_Color label_col = res_.isolated ? GREEN : DIM;
+        // dot
+        SDL_Rect dot = {x + PAD, iy_r + 4, 8, 8};
+        draw::filled_rounded_rect(r, dot, 4, dot_col);
+        draw::text(r, f->body, label, x + PAD + 14, iy_r, label_col);
+    }
+
     // Process breakdown
-    int cy = y + 100 + GAP;
-    card_bg(r, x, cy, w, h - 100 - GAP);
+    int cy = ry + ri_h + GAP;
+    int remaining_h = h - (100 + GAP + ri_h + GAP);
+    if (remaining_h < 60) remaining_h = 60;
+    card_bg(r, x, cy, w, remaining_h);
     draw::text(r, f->title, "Process Breakdown", x + PAD, cy + PAD, WHITE);
 
     if (ctx_.pm) {
