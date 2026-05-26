@@ -1,29 +1,32 @@
 #!/bin/bash
-# Launch HerOS with dedicated CPU cores (14-15) and 10GB RAM
+# Launch HerOS with dedicated CPU cores and memory limit
 # Uses systemd cgroups for hard resource isolation
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CORES="14-15"
-MEM_BYTES=10737418240  # 10GB
+NUM_CORES="14,15"
+MEM_BYTES=6442450944   # 6GB
+MEM_HIGH=5798205850    # 90% of 6GB (soft limit / pressure warning)
+MEM_DISPLAY="6 GB"
 
 echo "Launching HerOS with dedicated resources:"
-echo "  CPUs:   $CORES"
-echo "  Memory: 10 GB (hard limit)"
+echo "  CPUs:   $CORES (2 cores)"
+echo "  Memory: $MEM_DISPLAY (hard limit)"
 echo ""
 
-# Pin to cores 14-15 via taskset + cgroup memory/cpu isolation via systemd
+# Pin to cores via taskset + cgroup memory/cpu isolation via systemd
 exec sudo systemd-run \
     --scope \
     --unit=heros-os \
     --property=AllowedCPUs="$CORES" \
     --property=MemoryMax=$MEM_BYTES \
-    --property=MemoryHigh=9663676416 \
+    --property=MemoryHigh=$MEM_HIGH \
     --setenv=HOME="$HOME" \
     --setenv=DISPLAY="$DISPLAY" \
     --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
     --setenv=PULSE_SERVER="$PULSE_SERVER" \
     --setenv=SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-pulseaudio}" \
     --uid="$(id -u)" --gid="$(id -g)" \
-    taskset -c 14,15 "$SCRIPT_DIR/heros" "$@"
+    taskset -c $NUM_CORES "$SCRIPT_DIR/heros-bin" "$@"

@@ -4,7 +4,7 @@ LDFLAGS := -rdynamic -ldl $(shell pkg-config --libs sdl2 SDL2_ttf SDL2_image)
 
 SRC_DIR := src
 BUILD_DIR := build
-TARGET := heros
+TARGET := heros-bin
 
 # ── Core OS sources (exclude app plugins) ─────────────────────────
 CORE_SRCS := $(shell find $(SRC_DIR) -name '*.cpp' -not -path '$(SRC_DIR)/apps/*')
@@ -77,7 +77,7 @@ install-apps: apps
 	@echo "Installed 6 app bundles to $(APPS_DIR)"
 
 run: $(TARGET)
-	./$(TARGET)
+	./heros
 
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET)

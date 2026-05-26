@@ -1,0 +1,4 @@
+#!/bin/bash
+# HerOS launcher — always runs with resource isolation (2 cores, 6GB RAM)
+# For raw binary without isolation: ./heros-bin
+exec "$(dirname "$0")/run-isolated.sh" "$@"

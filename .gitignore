@@ -1,4 +1,4 @@
 build/
-heros
+heros-bin
 *.o
 .edits
