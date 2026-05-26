@@ -116,6 +116,11 @@ void WindowManager::close_window(int id) {
     focus_next_topmost();
 }
 
+void WindowManager::close_all_windows() {
+    minimized_ids_.clear();
+    windows_.clear();   // destroys all Window objects (and their AppContent)
+}
+
 Window* WindowManager::find_window(int id) {
     for (auto& w : windows_)
         if (w.id == id) return &w;

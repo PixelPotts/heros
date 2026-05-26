@@ -67,7 +67,8 @@ static void launch_autostart_apps(ProcessManager& pm, AppRegistry& registry,
 static WorkspaceManager* g_workspaces = nullptr;
 
 static bool handle_dock_click(int mx, int my, int screen_w, int screen_h,
-                               AppRegistry& registry, WindowManager& wm) {
+                               AppRegistry& registry, ProcessManager& pm,
+                               WindowManager& wm) {
     std::string app_id = dock_app_at(mx, my, screen_w, screen_h, wm, registry);
     if (app_id.empty()) return false;
 
@@ -86,7 +87,7 @@ static bool handle_dock_click(int mx, int my, int screen_w, int screen_h,
             }
         }
     } else {
-        registry.launch(app_id, wm, screen_w, screen_h);
+        pm.spawn(app_id, registry, wm, screen_w, screen_h);
     }
     return true;
 }
@@ -94,7 +95,8 @@ static bool handle_dock_click(int mx, int my, int screen_w, int screen_h,
 // ── Handle sidebar click ────────────────────────────────────────
 
 static bool handle_sidebar_click(int mx, int my, int screen_w, int screen_h,
-                                  AppRegistry& registry, WindowManager& wm) {
+                                  AppRegistry& registry, ProcessManager& pm,
+                                  WindowManager& wm) {
     std::string app_id = sidebar_app_at(mx, my, screen_h);
     if (app_id.empty()) return false;
 
@@ -113,7 +115,7 @@ static bool handle_sidebar_click(int mx, int my, int screen_w, int screen_h,
             }
         }
     } else {
-        registry.launch(app_id, wm, screen_w, screen_h);
+        pm.spawn(app_id, registry, wm, screen_w, screen_h);
     }
     return true;
 }
@@ -474,11 +476,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
                 int w, h;
                 SDL_GetWindowSize(window, &w, &h);
                 if (handle_dock_click(event.button.x, event.button.y, w, h,
-                                      registry, wm)) {
+                                      registry, pm, wm)) {
                     continue;
                 }
                 if (handle_sidebar_click(event.button.x, event.button.y, w, h,
-                                          registry, wm)) {
+                                          registry, pm, wm)) {
                     continue;
                 }
             }
@@ -586,7 +588,11 @@ int main(int /*argc*/, char* /*argv*/[]) {
         SDL_Delay(16);
     }
 
-    // Unload dynamic app plugins before tearing down SDL
+    // Destroy all windows (and their AppContent objects) BEFORE unloading
+    // the dynamic .so plugins — the AppContent vtables live in the .so code.
+    wm.close_all_windows();
+
+    // Now safe to unload dynamic app plugins
     registry.unload_all_dynamic();
 
     audio.cleanup();

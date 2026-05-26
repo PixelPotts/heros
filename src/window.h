@@ -184,6 +184,7 @@ public:
     int open_window(const std::string& title, Icon icon, SDL_Rect rect,
                     uint32_t flags, std::unique_ptr<AppContent> content);
     void close_window(int id);
+    void close_all_windows();   // force-close all (for shutdown)
     Window* find_window(int id);
     const Window* find_window(int id) const;
 
