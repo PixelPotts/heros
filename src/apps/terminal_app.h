@@ -3,9 +3,11 @@
 #include "../ui.h"
 #include <SDL2/SDL_ttf.h>
 #include <memory>
+#include <string>
 
 class PtyBackend;
 class VtScreen;
+struct VtStyle;
 
 // ── Terminal App (PTY-backed) ───────────────────────────────────
 
@@ -47,4 +49,7 @@ private:
     // Helpers
     void recalc_grid();
     void poll_pty();
+    void render_span(SDL_Renderer* r, const std::string& span,
+                     const VtStyle& style, int& x, int y);
+    static void encode_utf8(std::string& out, char32_t cp);
 };

@@ -36,7 +36,7 @@ $(BUILD_DIR):
 apps: $(APP_SOS)
 
 # ── Terminal app needs extra libraries (curl, ssl, zlib, archive) ─
-TERMINAL_LIBS := -lcurl -lssl -lcrypto -lz -larchive -lyaml-cpp
+TERMINAL_LIBS := -lcurl -lssl -lcrypto -lz -larchive -lyaml-cpp -lutil
 
 $(BUILD_DIR)/apps/terminal_app.so: $(SRC_DIR)/apps/terminal_app.cpp | $(BUILD_DIR)
 	@mkdir -p $(dir $@)

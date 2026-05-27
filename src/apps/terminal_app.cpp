@@ -1,12 +1,6 @@
 #include "terminal_app.h"
-#include "terminal_shell.h"
-#include "terminal_cmds_shell.h"
-#include "terminal_cmds_file.h"
-#include "terminal_cmds_text.h"
-#include "terminal_cmds_system.h"
-#include "terminal_cmds_net.h"
-#include "terminal_cmds_archive.h"
-#include "terminal_cmds_heros.h"
+#include "terminal_pty.h"
+#include "terminal_vt.h"
 #include "../app_registry.h"
 #include "../process.h"
 #include <cstdio>
@@ -23,36 +17,10 @@ static const int MONO_FONT_SIZE = 13;
 static const SDL_Color BG_COLOR   = {20, 22, 30, 245};
 static const SDL_Color FG_COLOR   = {204, 204, 204, 255};
 static const SDL_Color CURSOR_CLR = {100, 200, 100, 200};
-static const SDL_Color PROMPT_CLR = {100, 200, 255, 255};
-
-// ── ANSI 8-color palette ────────────────────────────────────────
-
-static const uint8_t ANSI_COLORS[8][3] = {
-    {  0,   0,   0},  // 0: black
-    {205,  49,  49},  // 1: red
-    { 13, 188, 121},  // 2: green
-    {229, 229,  16},  // 3: yellow
-    { 36, 114, 200},  // 4: blue
-    {188,  63, 188},  // 5: magenta
-    { 17, 168, 205},  // 6: cyan
-    {204, 204, 204},  // 7: white
-};
-
-static const uint8_t ANSI_BRIGHT[8][3] = {
-    {102, 102, 102},  // 0: bright black (gray)
-    {241,  76,  76},  // 1: bright red
-    { 35, 209, 139},  // 2: bright green
-    {245, 245,  67},  // 3: bright yellow
-    { 59, 142, 234},  // 4: bright blue
-    {214, 112, 214},  // 5: bright magenta
-    { 41, 184, 219},  // 6: bright cyan
-    {229, 229, 229},  // 7: bright white
-};
 
 // ── Constructor / Destructor ────────────────────────────────────
 
 TerminalApp::TerminalApp() {
-    // Load monospace font
     mono_font_ = TTF_OpenFont(MONO_FONT_PATH, MONO_FONT_SIZE);
     if (mono_font_) {
         TTF_SizeUTF8(mono_font_, "M", &char_w_, &char_h_);
@@ -62,269 +30,43 @@ TerminalApp::TerminalApp() {
         char_h_ = 15;
     }
 
-    // Create shell engine
-    shell_ = std::make_unique<ShellEngine>();
-
-    // Register all commands
-    register_shell_commands(*shell_);
-    register_file_commands(*shell_);
-    register_text_commands(*shell_);
-    register_system_commands(*shell_);
-    register_net_commands(*shell_);
-    register_archive_commands(*shell_);
-    register_heros_commands(*shell_);
-
-    // Welcome message
-    write_output("\033[1;36m");
-    write_output("    _  _          ___  ___ \n");
-    write_output("   | || |___ _ _ / _ \\/ __|\n");
-    write_output("   | __ / -_) '_| (_) \\__ \\\n");
-    write_output("   |_||_\\___|_|  \\___/|___/\n");
-    write_output("\033[0m\n");
-    write_output("\033[1mHerOS Terminal v0.1.0\033[0m — 100 built-in commands\n");
-    write_output("Type '\033[1mhelp\033[0m' for a list of commands.\n\n");
+    vt_ = std::make_unique<VtScreen>(cols_, rows_);
+    pty_ = std::make_unique<PtyBackend>();
+    pty_->start(cols_, rows_);
 }
 
 TerminalApp::~TerminalApp() {
+    pty_.reset();   // shutdown PTY first (kills child)
+    vt_.reset();
     if (mono_font_) TTF_CloseFont(mono_font_);
 }
 
 // ── Grid recalc ─────────────────────────────────────────────────
 
 void TerminalApp::recalc_grid() {
-    if (char_w_ > 0 && char_h_ > 0) {
-        cols_ = std::max(20, (last_rect_.w - 16) / char_w_);
-        rows_ = std::max(5, (last_rect_.h - 8) / char_h_);
+    if (char_w_ <= 0 || char_h_ <= 0) return;
+    int new_cols = std::max(20, (last_rect_.w - 16) / char_w_);
+    int new_rows = std::max(5, (last_rect_.h - 8) / char_h_);
+    if (new_cols != cols_ || new_rows != rows_) {
+        cols_ = new_cols;
+        rows_ = new_rows;
+        vt_->resize(cols_, rows_);
+        pty_->set_size(cols_, rows_);
     }
 }
 
-// ── Prompt ──────────────────────────────────────────────────────
+// ── Poll PTY ────────────────────────────────────────────────────
 
-std::string TerminalApp::get_prompt() const {
-    auto& env = const_cast<ShellEngine*>(shell_.get())->env();
-    std::string user = env.count("USER") ? env["USER"] : "hero";
-    std::string host = env.count("HOSTNAME") ? env["HOSTNAME"] : "heros";
-    std::string cwd = shell_->cwd();
-
-    // Shorten home dir
-    std::string home = env.count("HOME") ? env["HOME"] : "/home";
-    if (cwd.find(home) == 0) {
-        cwd = "~" + cwd.substr(home.size());
-    }
-
-    return "\033[1;32m" + user + "@" + host + "\033[0m:\033[1;34m" + cwd + "\033[0m$ ";
-}
-
-// ── ANSI SGR application ────────────────────────────────────────
-
-void TerminalApp::apply_sgr(int code) {
-    if (code == 0) { reset_style(); return; }
-    if (code == 1) { current_style_.bold = true; return; }
-    if (code == 2) { current_style_.dim = true; return; }
-    if (code == 4) { current_style_.underline = true; return; }
-    if (code == 22) { current_style_.bold = false; current_style_.dim = false; return; }
-    if (code == 24) { current_style_.underline = false; return; }
-
-    // Foreground 30-37
-    if (code >= 30 && code <= 37) {
-        int idx = code - 30;
-        if (current_style_.bold) {
-            current_style_.fg_r = ANSI_BRIGHT[idx][0];
-            current_style_.fg_g = ANSI_BRIGHT[idx][1];
-            current_style_.fg_b = ANSI_BRIGHT[idx][2];
-        } else {
-            current_style_.fg_r = ANSI_COLORS[idx][0];
-            current_style_.fg_g = ANSI_COLORS[idx][1];
-            current_style_.fg_b = ANSI_COLORS[idx][2];
-        }
-        return;
-    }
-
-    // Default foreground
-    if (code == 39) {
-        current_style_.fg_r = 204; current_style_.fg_g = 204; current_style_.fg_b = 204;
-        return;
-    }
-
-    // Background 40-47
-    if (code >= 40 && code <= 47) {
-        int idx = code - 40;
-        current_style_.bg_r = ANSI_COLORS[idx][0];
-        current_style_.bg_g = ANSI_COLORS[idx][1];
-        current_style_.bg_b = ANSI_COLORS[idx][2];
-        current_style_.bg_a = 255;
-        return;
-    }
-
-    // Default background
-    if (code == 49) { current_style_.bg_a = 0; return; }
-
-    // Bright foreground 90-97
-    if (code >= 90 && code <= 97) {
-        int idx = code - 90;
-        current_style_.fg_r = ANSI_BRIGHT[idx][0];
-        current_style_.fg_g = ANSI_BRIGHT[idx][1];
-        current_style_.fg_b = ANSI_BRIGHT[idx][2];
-        return;
-    }
-
-    // Bright background 100-107
-    if (code >= 100 && code <= 107) {
-        int idx = code - 100;
-        current_style_.bg_r = ANSI_BRIGHT[idx][0];
-        current_style_.bg_g = ANSI_BRIGHT[idx][1];
-        current_style_.bg_b = ANSI_BRIGHT[idx][2];
-        current_style_.bg_a = 255;
-        return;
-    }
-
-    // Reverse video
-    if (code == 7) {
-        std::swap(current_style_.fg_r, current_style_.bg_r);
-        std::swap(current_style_.fg_g, current_style_.bg_g);
-        std::swap(current_style_.fg_b, current_style_.bg_b);
-        current_style_.bg_a = 255;
-        return;
-    }
-}
-
-// ── Write output with ANSI parsing ──────────────────────────────
-
-void TerminalApp::write_output(const std::string& text) {
-    if (buffer_.empty()) buffer_.push_back(TermLine{});
-
-    size_t i = 0;
-    while (i < text.size()) {
-        char c = text[i];
-
-        // ANSI escape sequence
-        if (c == '\033' && i + 1 < text.size() && text[i + 1] == '[') {
-            i += 2; // skip ESC[
-            std::vector<int> codes;
-            std::string num;
-
-            while (i < text.size()) {
-                if (text[i] >= '0' && text[i] <= '9') {
-                    num += text[i];
-                } else if (text[i] == ';') {
-                    codes.push_back(num.empty() ? 0 : std::stoi(num));
-                    num.clear();
-                } else {
-                    // End of sequence
-                    codes.push_back(num.empty() ? 0 : std::stoi(num));
-                    if (text[i] == 'm') {
-                        for (int code : codes) apply_sgr(code);
-                    }
-                    i++;
-                    break;
-                }
-                i++;
-            }
-            continue;
-        }
-
-        // Newline
-        if (c == '\n') {
-            buffer_.push_back(TermLine{});
-            i++;
-            continue;
-        }
-
-        // Carriage return
-        if (c == '\r') {
-            i++;
-            continue;
-        }
-
-        // Tab
-        if (c == '\t') {
-            int spaces = 8 - ((int)buffer_.back().chars.size() % 8);
-            for (int s = 0; s < spaces; s++) {
-                buffer_.back().chars.push_back({' ', current_style_});
-            }
-            i++;
-            continue;
-        }
-
-        // Regular character
-        if (c >= 32 || (unsigned char)c >= 128) {
-            buffer_.back().chars.push_back({c, current_style_});
-        }
-        i++;
-    }
-
-    // Trim buffer to max lines
-    while ((int)buffer_.size() > max_lines_) {
-        buffer_.erase(buffer_.begin());
-    }
-}
-
-void TerminalApp::write_line(const std::string& text) {
-    write_output(text + "\n");
-}
-
-// ── Execute input ───────────────────────────────────────────────
-
-void TerminalApp::execute_input() {
-    std::string input = input_line_;
-    input_line_.clear();
-    cursor_pos_ = 0;
-    history_idx_ = -1;
-
-    // Write prompt + input to buffer
-    write_output(get_prompt() + input + "\n");
-
-    // Add to history
-    if (!input.empty()) {
-        // Don't add duplicates
-        if (history_.empty() || history_.back() != input) {
-            history_.push_back(input);
+void TerminalApp::poll_pty() {
+    char buf[8192];
+    for (;;) {
+        int n = pty_->read_some(buf, (int)sizeof(buf));
+        if (n <= 0) break;
+        std::string response = vt_->process(buf, n);
+        if (!response.empty()) {
+            pty_->write_str(response);
         }
     }
-
-    if (input.empty()) return;
-
-    // Build command context
-    CmdContext cmd_ctx{
-        ctx_.fs,
-        ctx_.pm,
-        ctx_.registry,
-        ctx_.wm,
-        ctx_.notifications,
-        ctx_.bus,
-        ctx_.screen_w, ctx_.screen_h,
-        ctx_.window_id,
-        shell_->cwd(),
-        shell_->env(),
-        "",  // stdin
-        ""   // stdout
-    };
-
-    int status = shell_->execute(input, cmd_ctx);
-
-    // Handle special return codes
-    if (status == -999) {
-        // exit
-        if (ctx_.wm) ctx_.request_close();
-        return;
-    }
-    if (status == -998) {
-        // clear
-        buffer_.clear();
-        scroll_offset_ = 0;
-        return;
-    }
-
-    // Write output
-    if (!cmd_ctx.stdout_data.empty()) {
-        write_output(cmd_ctx.stdout_data);
-        // Ensure output ends with newline
-        if (!cmd_ctx.stdout_data.empty() && cmd_ctx.stdout_data.back() != '\n') {
-            write_output("\n");
-        }
-    }
-
-    scroll_offset_ = 0;
 }
 
 // ── Rendering ───────────────────────────────────────────────────
@@ -333,6 +75,14 @@ void TerminalApp::render(const RenderCtx& ctx, SDL_Rect cr) {
     last_rect_ = cr;
     recalc_grid();
     SDL_Renderer* r = ctx.r;
+
+    // Poll for new data from the shell
+    poll_pty();
+
+    // Check if child died
+    if (!pty_->is_alive()) {
+        // Could auto-close or show message — for now just let the last output stay
+    }
 
     // Cursor blink
     Uint32 now = SDL_GetTicks();
@@ -352,151 +102,111 @@ void TerminalApp::render(const RenderCtx& ctx, SDL_Rect cr) {
     int pad_y = 4;
     int x0 = cr.x + pad_x;
     int y0 = cr.y + pad_y;
-    int visible_rows = (cr.h - pad_y * 2) / char_h_;
-    if (visible_rows < 1) visible_rows = 1;
 
-    // Calculate prompt for input line
-    std::string raw_prompt = get_prompt();
-    // Strip ANSI from prompt to get display length
-    std::string display_prompt;
-    {
-        size_t j = 0;
-        while (j < raw_prompt.size()) {
-            if (raw_prompt[j] == '\033' && j + 1 < raw_prompt.size() && raw_prompt[j+1] == '[') {
-                j += 2;
-                while (j < raw_prompt.size() && raw_prompt[j] != 'm') j++;
-                if (j < raw_prompt.size()) j++;
-            } else {
-                display_prompt += raw_prompt[j++];
-            }
-        }
-    }
+    // Determine which rows to render
+    int visible_rows = rows_;
 
-    // The input line takes one row at the bottom
-    int buffer_rows = visible_rows - 1;
-    if (buffer_rows < 0) buffer_rows = 0;
+    // If scrolled back, show scrollback lines
+    int sb_size = vt_->scrollback_size();
+    int max_scroll = sb_size;
+    if (scroll_offset_ > max_scroll) scroll_offset_ = max_scroll;
 
-    // Calculate which buffer lines to show
-    int total_lines = (int)buffer_.size();
-    int start_line = total_lines - buffer_rows - scroll_offset_;
-    if (start_line < 0) start_line = 0;
-    int end_line = std::min(total_lines, start_line + buffer_rows);
-
-    // Render buffer lines
-    for (int li = start_line; li < end_line; li++) {
-        int screen_row = li - start_line;
+    // Render rows
+    for (int screen_row = 0; screen_row < visible_rows; screen_row++) {
         int y = y0 + screen_row * char_h_;
 
-        auto& line = buffer_[li];
+        // Which logical row does this screen row correspond to?
+        int sb_row = screen_row - scroll_offset_ + (sb_size - max_scroll + scroll_offset_);
+        // Simpler: when scroll_offset_ > 0, we're looking at scrollback
+        // screen_row maps to scrollback or grid
 
-        // Group same-style spans for efficient rendering
-        size_t ci = 0;
+        int row_from_top = screen_row; // in the full virtual buffer
+        int offset_row = row_from_top - scroll_offset_;
+
+        // Collect cells for this row
+        const VtCell* cells = nullptr;
+        int ncells = 0;
+
+        if (scroll_offset_ > 0 && screen_row < scroll_offset_) {
+            // This row comes from scrollback
+            int sb_idx = sb_size - scroll_offset_ + screen_row;
+            if (sb_idx >= 0 && sb_idx < sb_size) {
+                auto& sb = vt_->scrollback();
+                cells = sb[(size_t)sb_idx].data();
+                ncells = (int)sb[(size_t)sb_idx].size();
+            }
+        } else {
+            // From the live grid
+            int grid_row = screen_row - scroll_offset_;
+            if (grid_row >= 0 && grid_row < vt_->rows()) {
+                // Use cell() accessor
+                // We need to render cell by cell or span-group
+                // Let's render span-grouped for efficiency
+            }
+        }
+
+        // Render span-grouped text
         int x = x0;
-        while (ci < line.chars.size()) {
-            AnsiStyle style = line.chars[ci].style;
 
-            // Collect characters with same style
-            std::string span;
-            while (ci < line.chars.size() && line.chars[ci].style == style) {
-                span += line.chars[ci].ch;
-                ci++;
+        if (cells && ncells > 0) {
+            // Scrollback row
+            int ci = 0;
+            while (ci < ncells) {
+                const VtStyle& style = cells[ci].style;
+                std::string span;
+                while (ci < ncells && cells[ci].style == style) {
+                    char32_t ch = cells[ci].ch;
+                    if (ch < 128) {
+                        span += (char)ch;
+                    } else {
+                        // UTF-8 encode
+                        encode_utf8(span, ch);
+                    }
+                    ci++;
+                }
+                render_span(r, span, style, x, y);
             }
-
-            // Draw background if non-transparent
-            if (style.bg_a > 0) {
-                int tw = 0;
-                TTF_SizeUTF8(mono_font_, span.c_str(), &tw, nullptr);
-                SDL_Rect bg = {x, y, tw, char_h_};
-                SDL_SetRenderDrawColor(r, style.bg_r, style.bg_g, style.bg_b, style.bg_a);
-                SDL_RenderFillRect(r, &bg);
+        } else if (scroll_offset_ == 0 || screen_row >= scroll_offset_) {
+            int grid_row = screen_row - scroll_offset_;
+            if (grid_row >= 0 && grid_row < vt_->rows()) {
+                int ci = 0;
+                while (ci < vt_->cols()) {
+                    const VtStyle& style = vt_->cell(grid_row, ci).style;
+                    std::string span;
+                    while (ci < vt_->cols() && vt_->cell(grid_row, ci).style == style) {
+                        char32_t ch = vt_->cell(grid_row, ci).ch;
+                        if (ch < 128) {
+                            span += (char)ch;
+                        } else {
+                            encode_utf8(span, ch);
+                        }
+                        ci++;
+                    }
+                    render_span(r, span, style, x, y);
+                }
             }
-
-            // Draw text
-            SDL_Color fg = {style.fg_r, style.fg_g, style.fg_b, 255};
-            if (style.dim) {
-                fg.r = fg.r * 2 / 3;
-                fg.g = fg.g * 2 / 3;
-                fg.b = fg.b * 2 / 3;
-            }
-
-            draw::text(r, mono_font_, span.c_str(), x, y, fg);
-
-            int tw = 0;
-            TTF_SizeUTF8(mono_font_, span.c_str(), &tw, nullptr);
-
-            // Underline
-            if (style.underline) {
-                SDL_SetRenderDrawColor(r, fg.r, fg.g, fg.b, fg.a);
-                SDL_RenderDrawLine(r, x, y + char_h_ - 2, x + tw, y + char_h_ - 2);
-            }
-
-            x += tw;
         }
     }
 
-    // Render input line at bottom
-    int input_y = y0 + buffer_rows * char_h_;
+    // Draw cursor (only when not scrolled back and cursor is visible from VT)
+    if (scroll_offset_ == 0 && vt_->cursor_visible() && cursor_visible_) {
+        int cx = x0 + vt_->cursor_col() * char_w_;
+        int cy = y0 + vt_->cursor_row() * char_h_;
+        SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(r, CURSOR_CLR.r, CURSOR_CLR.g, CURSOR_CLR.b, CURSOR_CLR.a);
+        SDL_Rect cur_rect = {cx, cy, char_w_, char_h_};
+        SDL_RenderFillRect(r, &cur_rect);
 
-    // Render the prompt with ANSI colors
-    {
-        AnsiStyle prompt_style;
-        int px = x0;
-        size_t j = 0;
-        while (j < raw_prompt.size()) {
-            if (raw_prompt[j] == '\033' && j + 1 < raw_prompt.size() && raw_prompt[j+1] == '[') {
-                j += 2;
-                std::vector<int> codes;
-                std::string num;
-                while (j < raw_prompt.size()) {
-                    if (raw_prompt[j] >= '0' && raw_prompt[j] <= '9') {
-                        num += raw_prompt[j];
-                    } else if (raw_prompt[j] == ';') {
-                        codes.push_back(num.empty() ? 0 : std::stoi(num));
-                        num.clear();
-                    } else {
-                        codes.push_back(num.empty() ? 0 : std::stoi(num));
-                        if (raw_prompt[j] == 'm') {
-                            AnsiStyle saved = current_style_;
-                            current_style_ = prompt_style;
-                            for (int code : codes) apply_sgr(code);
-                            prompt_style = current_style_;
-                            current_style_ = saved;
-                        }
-                        j++;
-                        break;
-                    }
-                    j++;
-                }
-            } else {
-                // Render character
-                char buf[2] = {raw_prompt[j], 0};
-                SDL_Color fg = {prompt_style.fg_r, prompt_style.fg_g, prompt_style.fg_b, 255};
-                draw::text(r, mono_font_, buf, px, input_y, fg);
-                int cw = 0;
-                TTF_SizeUTF8(mono_font_, buf, &cw, nullptr);
-                px += cw;
-                j++;
+        // Redraw the character under the cursor in dark color so it's visible
+        if (vt_->cursor_row() < vt_->rows() && vt_->cursor_col() < vt_->cols()) {
+            const VtCell& cc = vt_->cell(vt_->cursor_row(), vt_->cursor_col());
+            if (cc.ch > 32) {
+                std::string ch_str;
+                if (cc.ch < 128) ch_str += (char)cc.ch;
+                else encode_utf8(ch_str, cc.ch);
+                SDL_Color dark = {20, 22, 30, 255};
+                draw::text(r, mono_font_, ch_str.c_str(), cx, cy, dark);
             }
-        }
-
-        // Render input text
-        if (!input_line_.empty()) {
-            draw::text(r, mono_font_, input_line_.c_str(), px, input_y, FG_COLOR);
-        }
-
-        // Cursor
-        if (cursor_visible_) {
-            int cursor_x = px;
-            if (cursor_pos_ > 0 && cursor_pos_ <= (int)input_line_.size()) {
-                std::string before = input_line_.substr(0, cursor_pos_);
-                int tw = 0;
-                TTF_SizeUTF8(mono_font_, before.c_str(), &tw, nullptr);
-                cursor_x = px + tw;
-            }
-            SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
-            SDL_SetRenderDrawColor(r, CURSOR_CLR.r, CURSOR_CLR.g, CURSOR_CLR.b, CURSOR_CLR.a);
-            SDL_Rect cur = {cursor_x, input_y, 2, char_h_};
-            SDL_RenderFillRect(r, &cur);
         }
     }
 
@@ -509,181 +219,205 @@ void TerminalApp::render(const RenderCtx& ctx, SDL_Rect cr) {
     }
 }
 
-// ── Input Events ────────────────────────────────────────────────
+// ── Span rendering helper ───────────────────────────────────────
+
+void TerminalApp::render_span(SDL_Renderer* r, const std::string& span,
+                               const VtStyle& style, int& x, int y) {
+    if (span.empty()) return;
+
+    int tw = 0;
+    TTF_SizeUTF8(mono_font_, span.c_str(), &tw, nullptr);
+
+    // Background
+    if (style.bg_a > 0) {
+        SDL_SetRenderDrawColor(r, style.bg_r, style.bg_g, style.bg_b, style.bg_a);
+        SDL_Rect bg = {x, y, tw, char_h_};
+        SDL_RenderFillRect(r, &bg);
+    }
+
+    // Foreground
+    SDL_Color fg = {style.fg_r, style.fg_g, style.fg_b, 255};
+    if (style.dim) {
+        fg.r = fg.r * 2 / 3;
+        fg.g = fg.g * 2 / 3;
+        fg.b = fg.b * 2 / 3;
+    }
+    if (!style.invisible) {
+        draw::text(r, mono_font_, span.c_str(), x, y, fg);
+    }
+
+    // Underline
+    if (style.underline) {
+        SDL_SetRenderDrawColor(r, fg.r, fg.g, fg.b, fg.a);
+        SDL_RenderDrawLine(r, x, y + char_h_ - 2, x + tw, y + char_h_ - 2);
+    }
+
+    // Strikethrough
+    if (style.strikethrough) {
+        SDL_SetRenderDrawColor(r, fg.r, fg.g, fg.b, fg.a);
+        SDL_RenderDrawLine(r, x, y + char_h_ / 2, x + tw, y + char_h_ / 2);
+    }
+
+    x += tw;
+}
+
+// ── UTF-8 encode helper ────────────────────────────────────────
+
+void TerminalApp::encode_utf8(std::string& out, char32_t cp) {
+    if (cp < 0x80) {
+        out += (char)cp;
+    } else if (cp < 0x800) {
+        out += (char)(0xC0 | (cp >> 6));
+        out += (char)(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+        out += (char)(0xE0 | (cp >> 12));
+        out += (char)(0x80 | ((cp >> 6) & 0x3F));
+        out += (char)(0x80 | (cp & 0x3F));
+    } else {
+        out += (char)(0xF0 | (cp >> 18));
+        out += (char)(0x80 | ((cp >> 12) & 0x3F));
+        out += (char)(0x80 | ((cp >> 6) & 0x3F));
+        out += (char)(0x80 | (cp & 0x3F));
+    }
+}
+
+// ── Key translation ─────────────────────────────────────────────
 
 void TerminalApp::on_key_down(SDL_Keycode key) {
     cursor_blink_time_ = SDL_GetTicks();
     cursor_visible_ = true;
 
     SDL_Keymod mod = SDL_GetModState();
+    bool ctrl = (mod & KMOD_CTRL) != 0;
+    bool shift = (mod & KMOD_SHIFT) != 0;
+    (void)shift;
+
+    // When scrolled back, snap to bottom on any key except scroll keys
+    if (scroll_offset_ > 0 && key != SDLK_PAGEUP && key != SDLK_PAGEDOWN) {
+        scroll_offset_ = 0;
+    }
+
+    // Application cursor mode prefix
+    const char* app_prefix = vt_->app_cursor_keys() ? "\033O" : "\033[";
 
     switch (key) {
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
-        execute_input();
+        pty_->write_str("\r");
         return;
 
     case SDLK_BACKSPACE:
-        if (cursor_pos_ > 0 && cursor_pos_ <= (int)input_line_.size()) {
-            input_line_.erase(cursor_pos_ - 1, 1);
-            cursor_pos_--;
-        }
-        return;
-
-    case SDLK_DELETE:
-        if (cursor_pos_ < (int)input_line_.size()) {
-            input_line_.erase(cursor_pos_, 1);
-        }
-        return;
-
-    case SDLK_LEFT:
-        if (cursor_pos_ > 0) cursor_pos_--;
-        return;
-
-    case SDLK_RIGHT:
-        if (cursor_pos_ < (int)input_line_.size()) cursor_pos_++;
-        return;
-
-    case SDLK_HOME:
-        cursor_pos_ = 0;
-        return;
-
-    case SDLK_END:
-        cursor_pos_ = (int)input_line_.size();
-        return;
-
-    case SDLK_UP:
-        // History navigation
-        if (!history_.empty()) {
-            if (history_idx_ == -1) {
-                saved_input_ = input_line_;
-                history_idx_ = (int)history_.size() - 1;
-            } else if (history_idx_ > 0) {
-                history_idx_--;
-            }
-            input_line_ = history_[history_idx_];
-            cursor_pos_ = (int)input_line_.size();
-        }
-        return;
-
-    case SDLK_DOWN:
-        if (history_idx_ >= 0) {
-            history_idx_++;
-            if (history_idx_ >= (int)history_.size()) {
-                history_idx_ = -1;
-                input_line_ = saved_input_;
-            } else {
-                input_line_ = history_[history_idx_];
-            }
-            cursor_pos_ = (int)input_line_.size();
-        }
-        return;
-
-    case SDLK_PAGEUP:
-        scroll_offset_ += rows_ / 2;
-        if (scroll_offset_ > (int)buffer_.size() - 1) scroll_offset_ = (int)buffer_.size() - 1;
-        return;
-
-    case SDLK_PAGEDOWN:
-        scroll_offset_ -= rows_ / 2;
-        if (scroll_offset_ < 0) scroll_offset_ = 0;
+        pty_->write_str("\x7f");
         return;
 
     case SDLK_TAB:
-        // Simple tab completion: find commands starting with input
-        if (!input_line_.empty()) {
-            std::vector<std::string> matches;
-            for (auto& [name, _] : shell_->all_commands()) {
-                if (name.find(input_line_) == 0) matches.push_back(name);
-            }
-            if (matches.size() == 1) {
-                input_line_ = matches[0] + " ";
-                cursor_pos_ = (int)input_line_.size();
-            } else if (matches.size() > 1) {
-                std::sort(matches.begin(), matches.end());
-                write_output(get_prompt() + input_line_ + "\n");
-                std::string list;
-                for (auto& m : matches) {
-                    list += m + "  ";
-                }
-                write_line(list);
-            }
-        }
+        pty_->write_str("\t");
         return;
 
-    case SDLK_c:
-        if (mod & KMOD_CTRL) {
-            write_output(get_prompt() + input_line_ + "^C\n");
-            input_line_.clear();
-            cursor_pos_ = 0;
-            return;
-        }
-        break;
+    case SDLK_ESCAPE:
+        pty_->write_str("\033");
+        return;
 
-    case SDLK_l:
-        if (mod & KMOD_CTRL) {
-            buffer_.clear();
-            scroll_offset_ = 0;
-            return;
-        }
-        break;
+    case SDLK_UP:
+        pty_->write_str(std::string(app_prefix) + "A");
+        return;
 
-    case SDLK_u:
-        if (mod & KMOD_CTRL) {
-            input_line_.erase(0, cursor_pos_);
-            cursor_pos_ = 0;
-            return;
-        }
-        break;
+    case SDLK_DOWN:
+        pty_->write_str(std::string(app_prefix) + "B");
+        return;
 
-    case SDLK_k:
-        if (mod & KMOD_CTRL) {
-            input_line_.erase(cursor_pos_);
-            return;
-        }
-        break;
+    case SDLK_RIGHT:
+        pty_->write_str(std::string(app_prefix) + "C");
+        return;
 
-    case SDLK_a:
-        if (mod & KMOD_CTRL) {
-            cursor_pos_ = 0;
-            return;
-        }
-        break;
+    case SDLK_LEFT:
+        pty_->write_str(std::string(app_prefix) + "D");
+        return;
 
-    case SDLK_e:
-        if (mod & KMOD_CTRL) {
-            cursor_pos_ = (int)input_line_.size();
-            return;
-        }
-        break;
+    case SDLK_HOME:
+        pty_->write_str("\033[H");
+        return;
 
-    case SDLK_w:
-        if (mod & KMOD_CTRL) {
-            // Delete previous word
-            if (cursor_pos_ > 0) {
-                int end = cursor_pos_;
-                while (cursor_pos_ > 0 && input_line_[cursor_pos_ - 1] == ' ') cursor_pos_--;
-                while (cursor_pos_ > 0 && input_line_[cursor_pos_ - 1] != ' ') cursor_pos_--;
-                input_line_.erase(cursor_pos_, end - cursor_pos_);
-            }
+    case SDLK_END:
+        pty_->write_str("\033[F");
+        return;
+
+    case SDLK_INSERT:
+        pty_->write_str("\033[2~");
+        return;
+
+    case SDLK_DELETE:
+        pty_->write_str("\033[3~");
+        return;
+
+    case SDLK_PAGEUP:
+        if (shift) {
+            // Shift+PageUp: scroll back
+            scroll_offset_ += rows_ / 2;
+            int max_scroll = vt_->scrollback_size();
+            if (scroll_offset_ > max_scroll) scroll_offset_ = max_scroll;
             return;
         }
-        break;
+        pty_->write_str("\033[5~");
+        return;
+
+    case SDLK_PAGEDOWN:
+        if (shift) {
+            scroll_offset_ -= rows_ / 2;
+            if (scroll_offset_ < 0) scroll_offset_ = 0;
+            return;
+        }
+        pty_->write_str("\033[6~");
+        return;
+
+    // Function keys
+    case SDLK_F1:  pty_->write_str("\033OP"); return;
+    case SDLK_F2:  pty_->write_str("\033OQ"); return;
+    case SDLK_F3:  pty_->write_str("\033OR"); return;
+    case SDLK_F4:  pty_->write_str("\033OS"); return;
+    case SDLK_F5:  pty_->write_str("\033[15~"); return;
+    case SDLK_F6:  pty_->write_str("\033[17~"); return;
+    case SDLK_F7:  pty_->write_str("\033[18~"); return;
+    case SDLK_F8:  pty_->write_str("\033[19~"); return;
+    case SDLK_F9:  pty_->write_str("\033[20~"); return;
+    case SDLK_F10: pty_->write_str("\033[21~"); return;
+    case SDLK_F11: pty_->write_str("\033[23~"); return;
+    case SDLK_F12: pty_->write_str("\033[24~"); return;
 
     default:
         break;
+    }
+
+    // Ctrl+letter → control character
+    if (ctrl && key >= SDLK_a && key <= SDLK_z) {
+        char c = (char)(key - SDLK_a + 1);
+        pty_->write_bytes(&c, 1);
+        return;
+    }
+
+    // Ctrl+special
+    if (ctrl) {
+        switch (key) {
+        case SDLK_BACKSLASH:  pty_->write_str("\x1c"); return;
+        case SDLK_RIGHTBRACKET: pty_->write_str("\x1d"); return;
+        case SDLK_LEFTBRACKET:  pty_->write_str("\x1b"); return;
+        case SDLK_AT:         pty_->write_str("\x00"); return; // Ctrl+@
+        default: break;
+        }
     }
 }
 
 void TerminalApp::on_text_input(const char* text) {
     if (!text || !text[0]) return;
 
-    // Don't insert control characters
-    if ((unsigned char)text[0] < 32 && text[0] != '\t') return;
+    // Don't insert if a Ctrl combo was handled
+    SDL_Keymod mod = SDL_GetModState();
+    if (mod & KMOD_CTRL) return;
 
-    input_line_.insert(cursor_pos_, text);
-    cursor_pos_ += (int)strlen(text);
-    scroll_offset_ = 0;
+    pty_->write_str(text);
+
+    // Snap to bottom when typing
+    if (scroll_offset_ > 0) scroll_offset_ = 0;
 }
 
 void TerminalApp::on_scroll(int local_x, int local_y, int scroll_y) {
@@ -691,7 +425,7 @@ void TerminalApp::on_scroll(int local_x, int local_y, int scroll_y) {
 
     scroll_offset_ -= scroll_y * 3;
     if (scroll_offset_ < 0) scroll_offset_ = 0;
-    int max_scroll = std::max(0, (int)buffer_.size() - 1);
+    int max_scroll = vt_->scrollback_size();
     if (scroll_offset_ > max_scroll) scroll_offset_ = max_scroll;
 }
 
@@ -706,4 +440,4 @@ void TerminalApp::on_resize(int w, int h) {
 
 // ── HEROS_APP Macro ─────────────────────────────────────────────
 
-HEROS_APP(TerminalApp, "com.heros.terminal", "Terminal", "0.1.0")
+HEROS_APP(TerminalApp, "com.heros.terminal", "Terminal", "0.2.0")
