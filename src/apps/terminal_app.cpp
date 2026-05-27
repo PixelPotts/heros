@@ -115,14 +115,6 @@ void TerminalApp::render(const RenderCtx& ctx, SDL_Rect cr) {
     for (int screen_row = 0; screen_row < visible_rows; screen_row++) {
         int y = y0 + screen_row * char_h_;
 
-        // Which logical row does this screen row correspond to?
-        int sb_row = screen_row - scroll_offset_ + (sb_size - max_scroll + scroll_offset_);
-        // Simpler: when scroll_offset_ > 0, we're looking at scrollback
-        // screen_row maps to scrollback or grid
-
-        int row_from_top = screen_row; // in the full virtual buffer
-        int offset_row = row_from_top - scroll_offset_;
-
         // Collect cells for this row
         const VtCell* cells = nullptr;
         int ncells = 0;
