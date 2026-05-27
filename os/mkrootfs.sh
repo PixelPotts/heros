@@ -56,7 +56,6 @@ fi
 for so in "$HEROS_DIR"/build/apps/*.so; do
     [ -f "$so" ] || continue
     ldd "$so" 2>/dev/null | grep -oP '=> \K/\S+' | while read -r lib; do
-        local dir
         dir="$ROOTFS$(dirname "$lib")"
         mkdir -p "$dir"
         [ -f "$ROOTFS$lib" ] || cp "$lib" "$ROOTFS$lib"
@@ -78,14 +77,13 @@ BINS=(
 )
 
 for name in "${BINS[@]}"; do
-    local path
-    path=$(command -v "$name" 2>/dev/null) || continue
+    bin_path=$(command -v "$name" 2>/dev/null) || continue
     # Resolve symlinks
-    path=$(readlink -f "$path")
-    [ -f "$path" ] || continue
-    local dest="$ROOTFS/usr/bin/$name"
+    bin_path=$(readlink -f "$bin_path")
+    [ -f "$bin_path" ] || continue
+    dest="$ROOTFS/usr/bin/$name"
     [ -f "$dest" ] && continue
-    copy_with_deps "$path" "$dest"
+    copy_with_deps "$bin_path" "$dest"
 done
 
 # Symlinks that programs expect
@@ -151,6 +149,12 @@ fi
 # ── Locale ──────────────────────────────────────────────────────
 mkdir -p "$ROOTFS/usr/lib/locale"
 cp /usr/lib/locale/C.utf8 "$ROOTFS/usr/lib/locale/" -r 2>/dev/null || true
+
+# ── Dynamic linker cache ────────────────────────────────────────
+echo "  Generating ld.so.cache..."
+echo "/lib/x86_64-linux-gnu" > "$ROOTFS/etc/ld.so.conf"
+echo "/usr/lib/x86_64-linux-gnu" >> "$ROOTFS/etc/ld.so.conf"
+ldconfig -r "$ROOTFS" 2>/dev/null || true
 
 # ── Summary ──────────────────────────────────────────────────────
 TOTAL=$(du -sh "$ROOTFS" | cut -f1)

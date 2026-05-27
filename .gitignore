@@ -2,3 +2,5 @@ build/
 heros-bin
 *.o
 .edits
+os/rootfs/
+os/debug_sdl.sh
