@@ -21,45 +21,11 @@
 
 static const int INIT_W = 1280;
 static const int INIT_H = 720;
-static const char* WALLPAPER_URL =
-    "https://images.unsplash.com/photo-1494500764479-0c8f2919a3d8?w=1920&q=80";
-static const char* WALLPAPER_PATH = "assets/wallpaper.jpg";
+static const int TOPBAR_H = 36;
+static const int DOCK_H   = 58;
 static const char* FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 
-static SDL_Texture* load_wallpaper(SDL_Renderer* r) {
-    FILE* f = fopen(WALLPAPER_PATH, "r");
-    if (!f) {
-        fprintf(stderr, "Downloading wallpaper...\n");
-        char cmd[512];
-        snprintf(cmd, sizeof(cmd),
-                 "mkdir -p assets && curl -sL -o '%s' '%s'",
-                 WALLPAPER_PATH, WALLPAPER_URL);
-        system(cmd);
-    } else {
-        fclose(f);
-    }
-
-    SDL_Surface* surf = IMG_Load(WALLPAPER_PATH);
-    if (!surf) {
-        fprintf(stderr, "IMG_Load: %s\n", IMG_GetError());
-        return nullptr;
-    }
-    SDL_Texture* tex = SDL_CreateTextureFromSurface(r, surf);
-    SDL_FreeSurface(surf);
-    return tex;
-}
-
-// ── Launch autostart apps via ProcessManager ────────────────────
-
-static void launch_autostart_apps(ProcessManager& pm, AppRegistry& registry,
-                                   WindowManager& wm,
-                                   int screen_w, int screen_h) {
-    for (auto* m : registry.list_apps()) {
-        if (m->autostart) {
-            pm.spawn(m->app_id, registry, wm, screen_w, screen_h);
-        }
-    }
-}
+// wallpaper + autostart removed — terminal grid is the desktop
 
 // ── Handle dock click — works for any registered app ────────────
 
@@ -81,34 +47,6 @@ static bool handle_dock_click(int mx, int my, int screen_w, int screen_h,
                 wm.restore_from_dock(wid, screen_w, screen_h);
             } else if (win->active) {
                 wm.minimize(wid);
-            } else {
-                wm.bring_to_front(wid);
-                wm.set_focus(wid);
-            }
-        }
-    } else {
-        pm.spawn(app_id, registry, wm, screen_w, screen_h);
-    }
-    return true;
-}
-
-// ── Handle sidebar click ────────────────────────────────────────
-
-static bool handle_sidebar_click(int mx, int my, int screen_w, int screen_h,
-                                  AppRegistry& registry, ProcessManager& pm,
-                                  WindowManager& wm) {
-    std::string app_id = sidebar_app_at(mx, my, screen_h);
-    if (app_id.empty()) return false;
-
-    if (!registry.has_app(app_id)) return false;
-
-    // Same logic as dock: toggle or launch
-    if (registry.is_running(app_id)) {
-        int wid = registry.find_window_for_app(app_id);
-        auto* win = wm.find_window(wid);
-        if (win) {
-            if (win->minimized) {
-                wm.restore_from_dock(wid, screen_w, screen_h);
             } else {
                 wm.bring_to_front(wid);
                 wm.set_focus(wid);
@@ -179,7 +117,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         return 1;
     }
 
-    SDL_Texture* wallpaper = load_wallpaper(renderer);
+    SDL_Texture* wallpaper = nullptr; // no wallpaper — terminal grid is the background
 
     FrostRenderer frost;
     int prev_w = INIT_W, prev_h = INIT_H;
@@ -261,7 +199,27 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Launch autostart apps through process manager
     int sw, sh;
     SDL_GetWindowSize(window, &sw, &sh);
-    launch_autostart_apps(pm, registry, wm, sw, sh);
+    // launch_autostart_apps(pm, registry, wm, sw, sh); // disabled: terminal grid is the desktop
+
+    // Spawn 15x10 terminal grid as desktop background
+    {
+        const int GRID_COLS = 15;
+        const int GRID_ROWS = 10;
+        int cell_w = sw / GRID_COLS;
+        int cell_h = (sh - TOPBAR_H - DOCK_H) / GRID_ROWS;
+        for (int row = 0; row < GRID_ROWS; row++) {
+            for (int col = 0; col < GRID_COLS; col++) {
+                SDL_Rect cell = {
+                    col * cell_w,
+                    TOPBAR_H + row * cell_h,
+                    cell_w,
+                    cell_h
+                };
+                registry.launch_at("com.heros.terminal", wm, cell,
+                                   WF_NoTitleBar, sw, sh);
+            }
+        }
+    }
 
     // Register global shortcuts
     shortcuts.bind("app.close", SDLK_w, KMOD_CTRL, [&]() {
@@ -335,6 +293,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
             if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE
                 && (event.key.keysym.mod & KMOD_CTRL))
                 running = false;
+
+            // ESC alone: unmaximize focused window
+            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE
+                && !(event.key.keysym.mod & (KMOD_CTRL | KMOD_ALT | KMOD_GUI))) {
+                auto* fw = wm.focused_window();
+                if (fw && fw->maximized) {
+                    wm.restore(fw->id);
+                }
+            }
 
             // Re-grab keyboard when window gains focus (grab can fail if window wasn't focused)
             if (event.type == SDL_WINDOWEVENT &&
@@ -479,10 +446,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
                                       registry, pm, wm)) {
                     continue;
                 }
-                if (handle_sidebar_click(event.button.x, event.button.y, w, h,
-                                          registry, pm, wm)) {
-                    continue;
-                }
+                // sidebar removed
             }
 
             wm.handle_event(event);
@@ -546,7 +510,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         // 4. Render UI components
         RenderCtx ctx = {renderer, &frost, &fonts, w, h, &theme_mgr, &animations};
         render_topbar(ctx);
-        render_left_sidebar(ctx, registry);
+        // render_left_sidebar removed
         render_right_sidebar(ctx);
         wm.render(ctx);
         render_dock(ctx, wm, registry);

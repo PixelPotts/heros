@@ -206,6 +206,67 @@ int AppRegistry::launch(const std::string& app_id, WindowManager& wm,
     return win_id;
 }
 
+// ── Launch at specific rect with custom flags ───────────────────
+
+int AppRegistry::launch_at(const std::string& app_id, WindowManager& wm,
+                           SDL_Rect rect, uint32_t extra_flags,
+                           int screen_w, int screen_h) {
+    auto it = apps_.find(app_id);
+    if (it == apps_.end()) {
+        fprintf(stderr, "AppRegistry: cannot launch unknown app '%s'\n",
+                app_id.c_str());
+        return -1;
+    }
+
+    const auto& manifest = it->second.manifest;
+
+    // Create app content (no singleton check — grid spawns many)
+    auto content = it->second.factory();
+    if (!content) {
+        fprintf(stderr, "AppRegistry: factory returned null for '%s'\n",
+                app_id.c_str());
+        return -1;
+    }
+
+    uint32_t win_flags = manifest.default_flags | extra_flags;
+
+    int win_id = wm.open_window(
+        manifest.name,
+        manifest.icon,
+        rect,
+        win_flags,
+        std::move(content)
+    );
+
+    if (win_id < 0) return -1;
+
+    auto* win = wm.find_window(win_id);
+    if (win) {
+        win->min_w = 1;
+        win->min_h = 1;
+        if (win->content) {
+            AppContext actx;
+            actx.window_id = win_id;
+            actx.app_id = app_id;
+            actx.wm = &wm;
+            actx.registry = this;
+            actx.pm = pm_;
+            actx.fs = fs_;
+            actx.settings = settings_;
+            actx.bus = bus_;
+            actx.clipboard = clipboard_;
+            actx.notifications = notifications_;
+            actx.audio = audio_;
+            actx.screen_w = screen_w;
+            actx.screen_h = screen_h;
+            win->content->set_context(actx);
+        }
+    }
+
+    on_window_opened(app_id, win_id);
+    return win_id;
+}
+
 // ── Running state tracking ──────────────────────────────────────
 
 bool AppRegistry::is_running(const std::string& app_id) const {

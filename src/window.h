@@ -31,6 +31,7 @@ enum WindowFlags : uint32_t {
     WF_Closable    = 1 << 2,
     WF_Minimizable = 1 << 3,
     WF_Maximizable = 1 << 4,
+    WF_NoTitleBar  = 1 << 5,
     WF_Default     = WF_Draggable | WF_Resizable | WF_Closable | WF_Minimizable | WF_Maximizable
 };
 
@@ -127,10 +128,12 @@ struct Window {
     std::unique_ptr<AppContent> content;
 
     SDL_Rect title_bar_rect() const {
+        if (flags & WF_NoTitleBar) return {rect.x, rect.y, rect.w, 0};
         return {rect.x, rect.y, rect.w, TITLEBAR_H};
     }
 
     SDL_Rect content_rect() const {
+        if (flags & WF_NoTitleBar) return rect;
         return {rect.x, rect.y + TITLEBAR_H, rect.w, rect.h - TITLEBAR_H};
     }
 

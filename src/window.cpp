@@ -40,8 +40,8 @@ HitZone Window::hit_test(int mx, int my) const {
         if (right)  return HitZone::ResizeE;
     }
 
-    // Title bar area
-    if (my < rect.y + TITLEBAR_H) {
+    // Title bar area (skip if no title bar)
+    if (!(flags & WF_NoTitleBar) && my < rect.y + TITLEBAR_H) {
         // Check buttons (right to left: close, maximize, minimize)
         SDL_Rect cb = close_btn_rect();
         if (mx >= cb.x - 4 && mx <= cb.x + cb.w + 4 &&
@@ -601,50 +601,52 @@ void WindowManager::render(const RenderCtx& ctx) {
         ctx.frost->render_panel(r, w->rect, {10, 14, 25, 170});
         draw::rounded_rect(r, w->rect, 10, {180, 195, 220, 40});
 
-        // Title bar
-        int tby = w->rect.y + 4;
-        draw::line(r, w->rect.x, w->rect.y + TITLEBAR_H,
-                   w->rect.x + w->rect.w, w->rect.y + TITLEBAR_H, {180, 195, 220, 25});
-        draw::text(r, ctx.fonts->body, w->title.c_str(),
-                   w->rect.x + 14, tby + 6, WHITE);
+        // Title bar (skip for WF_NoTitleBar windows)
+        if (!(w->flags & WF_NoTitleBar)) {
+            int tby = w->rect.y + 4;
+            draw::line(r, w->rect.x, w->rect.y + TITLEBAR_H,
+                       w->rect.x + w->rect.w, w->rect.y + TITLEBAR_H, {180, 195, 220, 25});
+            draw::text(r, ctx.fonts->body, w->title.c_str(),
+                       w->rect.x + 14, tby + 6, WHITE);
 
-        // Title bar buttons with hover highlights
-        bool this_hover = (hover_win_id_ == w->id);
+            // Title bar buttons with hover highlights
+            bool this_hover = (hover_win_id_ == w->id);
 
-        // Close button
-        {
-            SDL_Rect cb = w->close_btn_rect();
-            int cx = cb.x + cb.w / 2;
-            int cy = cb.y + cb.h / 2;
-            bool hovered = this_hover && hover_zone_ == HitZone::CloseButton;
-            if (hovered) {
-                draw::filled_rounded_rect(r, {cb.x - 4, cb.y - 4, cb.w + 8, cb.h + 8}, 4, {200, 60, 60, 60});
+            // Close button
+            {
+                SDL_Rect cb = w->close_btn_rect();
+                int cx = cb.x + cb.w / 2;
+                int cy = cb.y + cb.h / 2;
+                bool hovered = this_hover && hover_zone_ == HitZone::CloseButton;
+                if (hovered) {
+                    draw::filled_rounded_rect(r, {cb.x - 4, cb.y - 4, cb.w + 8, cb.h + 8}, 4, {200, 60, 60, 60});
+                }
+                draw::icon(r, Icon::Close, cx, cy, BTN_SIZE, hovered ? SDL_Color{255, 120, 120, 255} : SDL_Color{200, 100, 100, 200});
             }
-            draw::icon(r, Icon::Close, cx, cy, BTN_SIZE, hovered ? SDL_Color{255, 120, 120, 255} : SDL_Color{200, 100, 100, 200});
-        }
 
-        // Maximize button
-        {
-            SDL_Rect mb = w->maximize_btn_rect();
-            int cx = mb.x + mb.w / 2;
-            int cy = mb.y + mb.h / 2;
-            bool hovered = this_hover && hover_zone_ == HitZone::MaximizeButton;
-            if (hovered) {
-                draw::filled_rounded_rect(r, {mb.x - 4, mb.y - 4, mb.w + 8, mb.h + 8}, 4, {100, 150, 255, 40});
+            // Maximize button
+            {
+                SDL_Rect mb = w->maximize_btn_rect();
+                int cx = mb.x + mb.w / 2;
+                int cy = mb.y + mb.h / 2;
+                bool hovered = this_hover && hover_zone_ == HitZone::MaximizeButton;
+                if (hovered) {
+                    draw::filled_rounded_rect(r, {mb.x - 4, mb.y - 4, mb.w + 8, mb.h + 8}, 4, {100, 150, 255, 40});
+                }
+                draw::icon(r, Icon::Maximize, cx, cy, BTN_SIZE, hovered ? ACCENT : DIM);
             }
-            draw::icon(r, Icon::Maximize, cx, cy, BTN_SIZE, hovered ? ACCENT : DIM);
-        }
 
-        // Minimize button
-        {
-            SDL_Rect nb = w->minimize_btn_rect();
-            int cx = nb.x + nb.w / 2;
-            int cy = nb.y + nb.h / 2;
-            bool hovered = this_hover && hover_zone_ == HitZone::MinimizeButton;
-            if (hovered) {
-                draw::filled_rounded_rect(r, {nb.x - 4, nb.y - 4, nb.w + 8, nb.h + 8}, 4, {100, 150, 255, 40});
+            // Minimize button
+            {
+                SDL_Rect nb = w->minimize_btn_rect();
+                int cx = nb.x + nb.w / 2;
+                int cy = nb.y + nb.h / 2;
+                bool hovered = this_hover && hover_zone_ == HitZone::MinimizeButton;
+                if (hovered) {
+                    draw::filled_rounded_rect(r, {nb.x - 4, nb.y - 4, nb.w + 8, nb.h + 8}, 4, {100, 150, 255, 40});
+                }
+                draw::icon(r, Icon::Minimize, cx, cy, BTN_SIZE, hovered ? ACCENT : DIM);
             }
-            draw::icon(r, Icon::Minimize, cx, cy, BTN_SIZE, hovered ? ACCENT : DIM);
         }
 
         // Content — clip to content area

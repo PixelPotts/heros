@@ -87,6 +87,10 @@ public:
     int launch(const std::string& app_id, WindowManager& wm,
                int screen_w, int screen_h);
 
+    // Launch at a specific position/size with custom flags
+    int launch_at(const std::string& app_id, WindowManager& wm,
+                  SDL_Rect rect, uint32_t extra_flags, int screen_w, int screen_h);
+
     // Query running state
     bool is_running(const std::string& app_id) const;
     int find_window_for_app(const std::string& app_id) const;
