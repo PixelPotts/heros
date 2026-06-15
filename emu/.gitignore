@@ -6,3 +6,4 @@ tools/mkfat16
 test/kernel.elf
 test/kernel.bin
 *.o
+*.o

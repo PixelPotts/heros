@@ -26,7 +26,9 @@ exec sudo systemd-run \
     --setenv=HOME="$HOME" \
     --setenv=DISPLAY="$DISPLAY" \
     --setenv=XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
-    --setenv=PULSE_SERVER="$PULSE_SERVER" \
-    --setenv=SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-pulseaudio}" \
+    --setenv=DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}" \
+    --setenv=WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
+    --setenv=SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-}" \
+    --setenv=SDL_AUDIODRIVER=dummy \
     --uid="$(id -u)" --gid="$(id -g)" \
     taskset -c $NUM_CORES "$SCRIPT_DIR/heros-bin" "$@"
